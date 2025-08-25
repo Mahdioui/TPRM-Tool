@@ -1,9 +1,6 @@
 """
 PCAP Analysis Module for Vercel Deployment
 """
-import tempfile
-import os
-from collections import defaultdict, Counter
 import re
 
 class PcapAnalyzer:
@@ -38,45 +35,42 @@ class PcapAnalyzer:
                 return {"error": "No packets found in PCAP file"}
             
             # Initialize analysis results
-            analysis = {
-                'packet_count': len(packets),
-                'protocols': defaultdict(int),
-                'ips': defaultdict(int),
-                'ports': defaultdict(int),
-                'dns_queries': [],
-                'http_requests': [],
-                'threats': [],
-                'risk_score': 0,
-                'analysis_time': 0
-            }
+            protocols = {}
+            ips = {}
+            ports = {}
+            dns_queries = []
+            http_requests = []
+            threats = []
             
             # Analyze each packet
             for packet in packets:
                 # Protocol analysis
                 if IP in packet:
-                    analysis['ips'][packet[IP].src] += 1
-                    analysis['ips'][packet[IP].dst] += 1
+                    src_ip = packet[IP].src
+                    dst_ip = packet[IP].dst
+                    ips[src_ip] = ips.get(src_ip, 0) + 1
+                    ips[dst_ip] = ips.get(dst_ip, 0) + 1
                     
                     # TCP analysis
                     if TCP in packet:
-                        analysis['protocols']['TCP'] += 1
+                        protocols['TCP'] = protocols.get('TCP', 0) + 1
                         src_port = packet[TCP].sport
                         dst_port = packet[TCP].dport
-                        analysis['ports'][src_port] += 1
-                        analysis['ports'][dst_port] += 1
+                        ports[src_port] = ports.get(src_port, 0) + 1
+                        ports[dst_port] = ports.get(dst_port, 0) + 1
                         
                         # Check for suspicious ports
                         if src_port in self.threat_patterns['suspicious_ports'] or \
                            dst_port in self.threat_patterns['suspicious_ports']:
-                            analysis['threats'].append(f"Suspicious port usage: {src_port}->{dst_port}")
+                            threats.append(f"Suspicious port usage: {src_port}->{dst_port}")
                     
                     # UDP analysis
                     elif UDP in packet:
-                        analysis['protocols']['UDP'] += 1
+                        protocols['UDP'] = protocols.get('UDP', 0) + 1
                         src_port = packet[UDP].sport
                         dst_port = packet[UDP].dport
-                        analysis['ports'][src_port] += 1
-                        analysis['ports'][dst_port] += 1
+                        ports[src_port] = ports.get(src_port, 0) + 1
+                        ports[dst_port] = ports.get(dst_port, 0) + 1
                     
                     # DNS analysis
                     if DNS in packet and packet.haslayer(DNS):
@@ -84,76 +78,82 @@ class PcapAnalyzer:
                         if dns_layer.qr == 0:  # Query
                             if dns_layer.qd:
                                 query = str(dns_layer.qd.qname, 'utf-8')
-                                analysis['dns_queries'].append(query)
+                                dns_queries.append(query)
                                 
                                 # Check for suspicious domains
                                 for pattern in self.threat_patterns['suspicious_domains']:
                                     if re.search(pattern, query, re.IGNORECASE):
-                                        analysis['threats'].append(f"Suspicious DNS query: {query}")
+                                        threats.append(f"Suspicious DNS query: {query}")
                     
                     # HTTP analysis
                     if HTTP in packet:
-                        analysis['protocols']['HTTP'] += 1
+                        protocols['HTTP'] = protocols.get('HTTP', 0) + 1
                         if packet.haslayer(HTTP):
                             http_layer = packet[HTTP]
                             if hasattr(http_layer, 'Host'):
                                 host = str(http_layer.Host, 'utf-8')
-                                analysis['http_requests'].append(host)
+                                http_requests.append(host)
                                 
                                 # Check for suspicious HTTP traffic
                                 if 'HTTP' in self.threat_patterns['suspicious_protocols']:
-                                    analysis['threats'].append(f"HTTP traffic detected (insecure): {host}")
+                                    threats.append(f"HTTP traffic detected (insecure): {host}")
                 
                 # Other protocols
                 elif packet.haslayer('ARP'):
-                    analysis['protocols']['ARP'] += 1
+                    protocols['ARP'] = protocols.get('ARP', 0) + 1
                 elif packet.haslayer('ICMP'):
-                    analysis['protocols']['ICMP'] += 1
+                    protocols['ICMP'] = protocols.get('ICMP', 0) + 1
             
             # Calculate risk score
-            analysis['risk_score'] = self._calculate_risk_score(analysis)
+            risk_score = self._calculate_risk_score(len(packets), protocols, threats, ports)
             
-            # Convert defaultdict to regular dict for JSON serialization
-            analysis['protocols'] = dict(analysis['protocols'])
-            analysis['ips'] = dict(analysis['ips'])
-            analysis['ports'] = dict(analysis['ports'])
+            # Get top talkers and ports
+            top_ips = dict(sorted(ips.items(), key=lambda x: x[1], reverse=True)[:5])
+            top_ports = dict(sorted(ports.items(), key=lambda x: x[1], reverse=True)[:5])
             
-            # Get top talkers and protocols
-            analysis['top_ips'] = dict(Counter(analysis['ips']).most_common(5))
-            analysis['top_ports'] = dict(Counter(analysis['ports']).most_common(5))
-            
-            return analysis
+            return {
+                'packet_count': len(packets),
+                'protocols': protocols,
+                'ips': ips,
+                'ports': ports,
+                'dns_queries': dns_queries,
+                'http_requests': http_requests,
+                'threats': threats,
+                'risk_score': risk_score,
+                'top_ips': top_ips,
+                'top_ports': top_ports
+            }
             
         except ImportError as e:
             return {"error": f"Scapy not available: {str(e)}"}
         except Exception as e:
             return {"error": f"Analysis failed: {str(e)}"}
     
-    def _calculate_risk_score(self, analysis):
+    def _calculate_risk_score(self, packet_count, protocols, threats, ports):
         """Calculate risk score from 0-100"""
         score = 0
         
         # Base score from packet count
-        if analysis['packet_count'] > 10000:
+        if packet_count > 10000:
             score += 20
-        elif analysis['packet_count'] > 5000:
+        elif packet_count > 5000:
             score += 15
-        elif analysis['packet_count'] > 1000:
+        elif packet_count > 1000:
             score += 10
         
         # Threat score
-        score += len(analysis['threats']) * 15
+        score += len(threats) * 15
         
         # Protocol risk
-        if 'HTTP' in analysis['protocols']:
+        if 'HTTP' in protocols:
             score += 10
-        if 'FTP' in analysis['protocols']:
+        if 'FTP' in protocols:
             score += 20
-        if 'TELNET' in analysis['protocols']:
+        if 'TELNET' in protocols:
             score += 25
         
         # Suspicious port usage
-        suspicious_ports = [port for port in analysis['ports'] 
+        suspicious_ports = [port for port in ports 
                           if port in self.threat_patterns['suspicious_ports']]
         score += len(suspicious_ports) * 10
         
@@ -179,7 +179,7 @@ class PcapAnalyzer:
         if analysis['threats']:
             recommendations.append("Review and investigate detected threats")
         
-        if len(analysis['dns_queries']) > 100:
+        if len(analysis.get('dns_queries', [])) > 100:
             recommendations.append("Monitor DNS queries for unusual patterns")
         
         return recommendations
