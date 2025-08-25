@@ -3,14 +3,14 @@ import tempfile
 import os
 import time
 
-# Import our PCAP analyzer
-from pcap_analyzer import PcapAnalyzer
+# Import our simple PCAP parser
+from simple_pcap_parser import SimplePcapParser
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
-# Initialize PCAP analyzer
-analyzer = PcapAnalyzer()
+# Initialize simple PCAP parser
+analyzer = SimplePcapParser()
 
 # HTML template for the web interface
 HTML_TEMPLATE = """
@@ -181,7 +181,7 @@ def analyze_pcap():
         temp_file.close()
         
         try:
-            # Analyze the PCAP file
+            # Analyze the PCAP file using simple parser
             analysis_result = analyzer.analyze_pcap(temp_file.name)
             
             if 'error' in analysis_result:

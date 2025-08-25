@@ -1,6 +1,3 @@
 # Minimal dependencies for Vercel deployment
 Flask==2.3.3
 Werkzeug==2.3.7
-
-# PCAP Analysis (Vercel compatible)
-scapy==2.5.0
