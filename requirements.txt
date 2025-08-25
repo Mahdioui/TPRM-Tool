@@ -1,10 +1,7 @@
-# Core dependencies for Vercel
+# Minimal dependencies for Vercel deployment
 Flask==2.3.3
 Werkzeug==2.3.7
 flask-cors==4.0.0
-
-# Lightweight PCAP Analysis (Vercel compatible)
-scapy==2.5.0
 
 # Lightweight data processing
 pandas==2.1.1
