@@ -2,21 +2,21 @@
   "version": 2,
   "builds": [
     {
-      "src": "web_interface.py",
+      "src": "api/index.py",
       "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "web_interface.py"
+      "dest": "/api/index.py"
     }
   ],
   "env": {
     "PYTHONPATH": "."
   },
   "functions": {
-    "web_interface.py": {
+    "api/index.py": {
       "maxDuration": 30
     }
   }

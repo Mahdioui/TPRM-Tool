@@ -1,25 +1,21 @@
-# Core dependencies
+# Core dependencies for Vercel
 Flask==2.3.3
 Werkzeug==2.3.7
 flask-cors==4.0.0
 
-# PCAP Analysis
+# Lightweight PCAP Analysis (Vercel compatible)
 scapy==2.5.0
-pyshark==0.6.0
 
-# Data processing
+# Lightweight data processing
 pandas==2.1.1
 numpy==1.24.3
 
-# NLP and text analysis
+# Lightweight text analysis
 nltk==3.8.1
-spacy==3.6.1
 textblob==0.17.1
 
-# Visualization and reporting
+# Lightweight visualization
 matplotlib==3.7.2
-seaborn==0.12.2
-reportlab==4.0.4
 
 # Utilities
 requests==2.31.0
