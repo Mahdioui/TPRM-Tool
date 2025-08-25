@@ -161,9 +161,6 @@ MAX_CONTENT_LENGTH=100000000  # 100MB max file size
 - **Access Control**: Secure file handling and processing
 - **Audit Logging**: Comprehensive analysis logging and tracking
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
 ### Development Setup
 ```bash
@@ -178,26 +175,5 @@ pip install -r requirements.txt
 python -m pytest tests/
 ```
 
-## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **Scapy**: Advanced packet manipulation
-- **PyShark**: Wireshark integration
-- **spaCy**: Natural language processing
-- **ReportLab**: Professional PDF generation
-- **Flask**: Web framework foundation
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/pcap-security-analyzer/issues)
-- **Documentation**: [Wiki](https://github.com/yourusername/pcap-security-analyzer/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/pcap-security-analyzer/discussions)
-
----
-
-**Built with ❤️ for the cybersecurity community**
-
-*Professional-grade network security analysis for modern enterprises*
+**Built with ❤️, Salma**
