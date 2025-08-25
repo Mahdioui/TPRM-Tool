@@ -26,14 +26,36 @@ class PcapAnalyzer:
                 if len(header) < 24:
                     return {"error": "Invalid PCAP file - header too short"}
                 
-                # Check magic number
+                # Check for all possible PCAP magic numbers
                 magic = struct.unpack('>I', header[0:4])[0]
-                if magic != 0xa1b2c3d4:
-                    return {"error": "Invalid PCAP file - wrong magic number"}
+                magic_le = struct.unpack('<I', header[0:4])[0]
                 
-                # Parse header
-                version_major = struct.unpack('>H', header[4:6])[0]
-                version_minor = struct.unpack('>H', header[6:8])[0]
+                # Valid PCAP magic numbers
+                valid_magics = [
+                    0xa1b2c3d4,  # Big-endian
+                    0xd4c3b2a1,  # Little-endian
+                    0xa1b23c4d,  # Big-endian with nanosecond precision
+                    0x4d3cb2a1   # Little-endian with nanosecond precision
+                ]
+                
+                if magic not in valid_magics and magic_le not in valid_magics:
+                    return {"error": f"Invalid PCAP file - unsupported magic number: 0x{magic:08x}"}
+                
+                # Determine byte order and precision
+                if magic in valid_magics:
+                    byte_order = '>'
+                    precision = 'microsecond' if magic in [0xa1b2c3d4, 0xd4c3b2a1] else 'nanosecond'
+                else:
+                    byte_order = '<'
+                    precision = 'microsecond' if magic_le in [0xa1b2c3d4, 0xd4c3b2a1] else 'nanosecond'
+                
+                # Parse header with correct byte order
+                version_major = struct.unpack(f'{byte_order}H', header[4:6])[0]
+                version_minor = struct.unpack(f'{byte_order}H', header[6:8])[0]
+                timezone = struct.unpack(f'{byte_order}I', header[8:12])[0]
+                sigfigs = struct.unpack(f'{byte_order}I', header[12:16])[0]
+                snaplen = struct.unpack(f'{byte_order}I', header[16:20])[0]
+                linktype = struct.unpack(f'{byte_order}I', header[20:24])[0]
                 
                 # Initialize analysis
                 protocols = defaultdict(int)
@@ -51,8 +73,16 @@ class PcapAnalyzer:
                     if len(pkt_header) < 16:
                         break
                     
-                    # Parse packet header
-                    incl_len = struct.unpack('>I', pkt_header[8:12])[0]
+                    # Parse packet header with correct byte order
+                    ts_sec = struct.unpack(f'{byte_order}I', pkt_header[0:4])[0]
+                    if precision == 'nanosecond':
+                        ts_usec = struct.unpack(f'{byte_order}I', pkt_header[4:8])[0]
+                    else:
+                        ts_usec = struct.unpack(f'{byte_order}I', pkt_header[4:8])[0]
+                    
+                    incl_len = struct.unpack(f'{byte_order}I', pkt_header[8:12])[0]
+                    orig_len = struct.unpack(f'{byte_order}I', pkt_header[12:16])[0]
+                    
                     if incl_len == 0:
                         continue
                     
@@ -66,7 +96,7 @@ class PcapAnalyzer:
                     
                     # Basic packet analysis
                     if len(packet_data) >= 14:
-                        eth_type = struct.unpack('>H', packet_data[12:14])[0]
+                        eth_type = struct.unpack(f'{byte_order}H', packet_data[12:14])[0]
                         if eth_type == 0x0800 and len(packet_data) >= 34:  # IPv4
                             protocols['IP'] += 1
                             
@@ -82,8 +112,8 @@ class PcapAnalyzer:
                                 if ip_proto == 6:  # TCP
                                     protocols['TCP'] += 1
                                     if len(packet_data) >= 38:
-                                        src_port = struct.unpack('>H', packet_data[34:36])[0]
-                                        dst_port = struct.unpack('>H', packet_data[36:38])[0]
+                                        src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
+                                        dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
                                         ports[src_port] += 1
                                         ports[dst_port] += 1
                                         
@@ -104,8 +134,8 @@ class PcapAnalyzer:
                                 elif ip_proto == 17:  # UDP
                                     protocols['UDP'] += 1
                                     if len(packet_data) >= 38:
-                                        src_port = struct.unpack('>H', packet_data[34:36])[0]
-                                        dst_port = struct.unpack('>H', packet_data[36:38])[0]
+                                        src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
+                                        dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
                                         ports[src_port] += 1
                                         ports[dst_port] += 1
                                 
@@ -135,6 +165,9 @@ class PcapAnalyzer:
                     'top_ports': top_ports,
                     'file_info': {
                         'version': f"{version_major}.{version_minor}",
+                        'byte_order': 'Big-endian' if byte_order == '>' else 'Little-endian',
+                        'precision': precision,
+                        'link_type': linktype,
                         'total_size': f"{packet_count} packets ({total_bytes:,} bytes)"
                     }
                 }
@@ -444,7 +477,7 @@ def analyze_pcap():
                 pass
         
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+        return jsonify({"error": str(e)})
 
 @app.route('/download-report')
 def download_report():
