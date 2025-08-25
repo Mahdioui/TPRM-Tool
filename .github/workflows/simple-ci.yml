@@ -33,7 +33,12 @@ jobs:
     
     - name: Check Python syntax
       run: |
-        python -m py_compile src/*.py web_interface.py main.py
+        echo "Checking Python syntax..."
+        python -m py_compile src/analyzer.py
+        python -m py_compile src/risk_calculator.py
+        python -m py_compile src/enhanced_report_generator.py
+        python -m py_compile web_interface.py
+        python -m py_compile main.py
         echo "✅ All Python files have valid syntax"
     
     - name: Run basic tests
@@ -84,19 +89,3 @@ jobs:
         fi
         
         echo "✅ Basic security checks completed"
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: [test, security]
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Deploy to Vercel
-      uses: amondnet/vercel-action@v25
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ secrets.ORG_ID }}
-        vercel-project-id: ${{ secrets.PROJECT_ID }}
-        vercel-args: '--prod'
