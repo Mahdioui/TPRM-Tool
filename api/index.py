@@ -1,8 +1,4 @@
-from flask import Flask, jsonify, request, render_template_string
-import os
-import tempfile
-from werkzeug.utils import secure_filename
-import json
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -108,7 +104,7 @@ def analyze_pcap():
             return jsonify({"success": False, "error": "Invalid file type. Please upload a .pcap or .pcapng file"})
         
         # For now, return a mock analysis (we'll add real PCAP analysis next)
-        filename = secure_filename(file.filename)
+        filename = file.filename
         
         # Mock analysis results
         analysis_result = {
