@@ -14,7 +14,11 @@ class PcapAnalyzer:
     def __init__(self):
         self.threat_patterns = {
             'suspicious_ports': [22, 23, 3389, 5900, 8080, 8443, 4444, 31337, 6667],
-            'suspicious_protocols': ['HTTP', 'FTP', 'TELNET']
+            'suspicious_protocols': ['HTTP', 'FTP', 'TELNET'],
+            'suspicious_ips': [
+                '192.168.1.1', '10.0.0.1', '172.16.0.1',  # Common internal IPs
+                '8.8.8.8', '1.1.1.1'  # DNS servers (usually safe)
+            ]
         }
     
     def analyze_pcap(self, file_path):
@@ -63,9 +67,12 @@ class PcapAnalyzer:
                 ports = defaultdict(int)
                 threats = []
                 connections = []
+                packet_sizes = []
+                timestamps = []
                 
                 packet_count = 0
                 total_bytes = 0
+                start_time = None
                 
                 while True:
                     # Read packet header
@@ -85,6 +92,12 @@ class PcapAnalyzer:
                     
                     if incl_len == 0:
                         continue
+                    
+                    # Track timing
+                    if start_time is None:
+                        start_time = ts_sec
+                    timestamps.append(ts_sec)
+                    packet_sizes.append(incl_len)
                     
                     # Read packet data
                     packet_data = f.read(incl_len)
@@ -128,7 +141,9 @@ class PcapAnalyzer:
                                             'dst_ip': dst_ip,
                                             'src_port': src_port,
                                             'dst_port': dst_port,
-                                            'protocol': 'TCP'
+                                            'protocol': 'TCP',
+                                            'size': incl_len,
+                                            'timestamp': ts_sec
                                         })
                                 
                                 elif ip_proto == 17:  # UDP
@@ -145,16 +160,27 @@ class PcapAnalyzer:
                         elif eth_type == 0x0806:  # ARP
                             protocols['ARP'] += 1
                 
+                # Calculate additional metrics
+                duration = max(timestamps) - min(timestamps) if timestamps else 0
+                avg_packet_size = total_bytes / packet_count if packet_count > 0 else 0
+                packets_per_second = packet_count / duration if duration > 0 else 0
+                
                 # Calculate risk score
-                risk_score = self._calculate_risk_score(packet_count, protocols, threats, ports)
+                risk_score = self._calculate_risk_score(packet_count, protocols, threats, ports, ips)
                 
                 # Get top talkers and ports
                 top_ips = dict(sorted(ips.items(), key=lambda x: x[1], reverse=True)[:10])
                 top_ports = dict(sorted(ports.items(), key=lambda x: x[1], reverse=True)[:10])
                 
+                # Analyze connection patterns
+                connection_analysis = self._analyze_connections(connections, ips)
+                
                 return {
                     'packet_count': packet_count,
                     'total_bytes': total_bytes,
+                    'duration_seconds': duration,
+                    'avg_packet_size': round(avg_packet_size, 2),
+                    'packets_per_second': round(packets_per_second, 2),
                     'protocols': dict(protocols),
                     'ips': dict(ips),
                     'ports': dict(ports),
@@ -163,6 +189,7 @@ class PcapAnalyzer:
                     'risk_score': risk_score,
                     'top_ips': top_ips,
                     'top_ports': top_ports,
+                    'connection_analysis': connection_analysis,
                     'file_info': {
                         'version': f"{version_major}.{version_minor}",
                         'byte_order': 'Big-endian' if byte_order == '>' else 'Little-endian',
@@ -175,8 +202,32 @@ class PcapAnalyzer:
         except Exception as e:
             return {"error": f"Analysis failed: {str(e)}"}
     
-    def _calculate_risk_score(self, packet_count, protocols, threats, ports):
-        """Calculate risk score from 0-100"""
+    def _analyze_connections(self, connections, ips):
+        """Analyze connection patterns and statistics"""
+        if not connections:
+            return {}
+        
+        # Connection statistics
+        unique_ips = len(set([c['src_ip'] for c in connections] + [c['dst_ip'] for c in connections]))
+        unique_connections = len(set([(c['src_ip'], c['dst_ip'], c['src_port'], c['dst_port']) for c in connections]))
+        
+        # Most active IPs
+        ip_activity = defaultdict(int)
+        for conn in connections:
+            ip_activity[conn['src_ip']] += 1
+            ip_activity[conn['dst_ip']] += 1
+        
+        most_active_ips = dict(sorted(ip_activity.items(), key=lambda x: x[1], reverse=True)[:5])
+        
+        return {
+            'unique_ips': unique_ips,
+            'unique_connections': unique_connections,
+            'most_active_ips': most_active_ips,
+            'total_connections': len(connections)
+        }
+    
+    def _calculate_risk_score(self, packet_count, protocols, threats, ports, ips):
+        """Calculate comprehensive risk score from 0-100"""
         score = 0
         
         # Base score from packet count
@@ -193,39 +244,67 @@ class PcapAnalyzer:
         # Protocol risk
         if 'HTTP' in protocols:
             score += 10
+        if 'FTP' in protocols:
+            score += 20
+        if 'TELNET' in protocols:
+            score += 25
         
         # Suspicious port usage
         suspicious_ports = [port for port in ports 
                           if port in self.threat_patterns['suspicious_ports']]
         score += len(suspicious_ports) * 10
         
+        # IP diversity risk (too many unique IPs might indicate scanning)
+        if len(ips) > 100:
+            score += 15
+        elif len(ips) > 50:
+            score += 10
+        
         return min(score, 100)
     
     def get_recommendations(self, analysis):
-        """Get security recommendations based on analysis"""
+        """Get comprehensive security recommendations based on analysis"""
         recommendations = []
         
+        # Risk-based recommendations
         if analysis['risk_score'] > 70:
-            recommendations.append("CRITICAL: Immediate security review required")
+            recommendations.append("🚨 CRITICAL: Immediate security review required")
+            recommendations.append("🔍 Conduct full network security audit")
+            recommendations.append("📞 Contact security team immediately")
         elif analysis['risk_score'] > 50:
-            recommendations.append("HIGH: Security assessment recommended")
+            recommendations.append("⚠️ HIGH: Security assessment recommended")
+            recommendations.append("🔒 Review firewall and access controls")
+            recommendations.append("📊 Monitor network traffic patterns")
         elif analysis['risk_score'] > 30:
-            recommendations.append("MEDIUM: Monitor for suspicious activity")
+            recommendations.append("🟡 MEDIUM: Monitor for suspicious activity")
+            recommendations.append("📈 Implement enhanced logging")
+            recommendations.append("🔐 Review authentication mechanisms")
         else:
-            recommendations.append("LOW: Standard security practices sufficient")
+            recommendations.append("🟢 LOW: Standard security practices sufficient")
+            recommendations.append("✅ Continue regular security monitoring")
         
+        # Specific recommendations
         if analysis['threats']:
-            recommendations.append("Review and investigate detected threats")
+            recommendations.append("🔍 Review and investigate detected threats")
+            recommendations.append("🚫 Block suspicious IP addresses and ports")
         
         if len(analysis.get('ports', {})) > 50:
-            recommendations.append("Monitor for unusual port activity")
+            recommendations.append("📊 Monitor for unusual port activity")
+            recommendations.append("🔒 Implement port-based access controls")
+        
+        if analysis.get('connection_analysis', {}).get('unique_ips', 0) > 100:
+            recommendations.append("🌐 Investigate high IP diversity - possible scanning activity")
+        
+        if 'HTTP' in analysis.get('protocols', {}):
+            recommendations.append("🔒 Consider implementing HTTPS for all web traffic")
+            recommendations.append("🛡️ Deploy web application firewall (WAF)")
         
         return recommendations
 
 # Initialize analyzer
 analyzer = PcapAnalyzer()
 
-# HTML template with enhanced dashboard
+# Enhanced HTML template with comprehensive dashboard
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -239,7 +318,7 @@ HTML_TEMPLATE = """
         .header h1 { margin: 0; font-size: 2.5em; font-weight: 300; }
         .header p { margin: 10px 0 0 0; opacity: 0.9; font-size: 1.1em; }
         
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
         
         .upload-section { background: white; padding: 40px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); text-align: center; margin: 30px 0; }
         .upload-section h3 { color: #2c3e50; margin-bottom: 20px; }
@@ -250,11 +329,11 @@ HTML_TEMPLATE = """
         .analyze-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         
         .dashboard { display: none; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px; margin: 30px 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 30px 0; }
         .stat-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); text-align: center; transition: transform 0.3s; }
         .stat-card:hover { transform: translateY(-5px); }
-        .stat-number { font-size: 2.5em; font-weight: bold; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .stat-label { color: #7f8c8d; margin-top: 10px; font-size: 1.1em; }
+        .stat-number { font-size: 2.2em; font-weight: bold; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .stat-label { color: #7f8c8d; margin-top: 10px; font-size: 1em; }
         
         .section { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin: 25px 0; }
         .section h3 { color: #2c3e50; margin-bottom: 20px; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
@@ -269,10 +348,21 @@ HTML_TEMPLATE = """
         .error { color: #e74c3c; background: #fdf2f2; padding: 15px; border-radius: 10px; margin: 15px 0; }
         .success { color: #27ae60; background: #f0f9f0; padding: 15px; border-radius: 10px; margin: 15px 0; }
         .info { color: #3498db; background: #ebf3fd; padding: 15px; border-radius: 10px; margin: 15px 0; }
+        .warning { color: #f39c12; background: #fef9e7; padding: 15px; border-radius: 10px; margin: 15px 0; }
         
         .loading { text-align: center; padding: 40px; }
         .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 25px; margin: 25px 0; }
+        .metric-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.1); }
+        .metric-title { font-weight: 600; color: #2c3e50; margin-bottom: 15px; }
+        .metric-value { font-size: 1.5em; color: #3498db; font-weight: bold; }
+        
+        .connection-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .connection-table th, .connection-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        .connection-table th { background: #f8f9fa; font-weight: 600; color: #2c3e50; }
+        .connection-table tr:hover { background: #f8f9fa; }
     </style>
 </head>
 <body>
@@ -363,11 +453,67 @@ HTML_TEMPLATE = """
                         <div class="stat-number">${Object.keys(result.protocols).length}</div>
                         <div class="stat-label">Protocols Found</div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${(result.total_bytes / 1024 / 1024).toFixed(2)}</div>
+                        <div class="stat-label">Total Size (MB)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${result.connection_analysis?.unique_ips || 0}</div>
+                        <div class="stat-label">Unique IPs</div>
+                    </div>
+                </div>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-title">📊 Traffic Metrics</div>
+                        <div class="metric-value">${result.duration_seconds} seconds</div>
+                        <div>Duration</div>
+                        <div class="metric-value">${result.packets_per_second.toFixed(2)}</div>
+                        <div>Packets/Second</div>
+                        <div class="metric-value">${result.avg_packet_size.toFixed(0)} bytes</div>
+                        <div>Avg Packet Size</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">🌐 Connection Analysis</div>
+                        <div class="metric-value">${result.connection_analysis?.total_connections || 0}</div>
+                        <div>Total Connections</div>
+                        <div class="metric-value">${result.connection_analysis?.unique_connections || 0}</div>
+                        <div>Unique Connections</div>
+                        <div class="metric-value">${result.connection_analysis?.unique_ips || 0}</div>
+                        <div>Unique IP Addresses</div>
+                    </div>
                 </div>
                 
                 <div class="section">
                     <h3>📊 Protocol Analysis</h3>
                     <p><strong>Detected Protocols:</strong> ${Object.entries(result.protocols).map(([proto, count]) => `${proto}: ${count.toLocaleString()}`).join(', ')}</p>
+                </div>
+                
+                <div class="section">
+                    <h3>🏠 Top IP Addresses</h3>
+                    <div class="metrics-grid">
+                        ${Object.entries(result.top_ips).map(([ip, count]) => `
+                            <div class="metric-card">
+                                <div class="metric-title">${ip}</div>
+                                <div class="metric-value">${count.toLocaleString()}</div>
+                                <div>packets</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>🔌 Top Ports</h3>
+                    <div class="metrics-grid">
+                        ${Object.entries(result.top_ports).map(([port, count]) => `
+                            <div class="metric-card">
+                                <div class="metric-title">Port ${port}</div>
+                                <div class="metric-value">${count.toLocaleString()}</div>
+                                <div>packets</div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             `;
             
