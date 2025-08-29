@@ -1055,11 +1055,48 @@ def test_pcap_parsing():
             # Test the analyzer
             result = analyzer.analyze_pcap(test_file.name)
             
+            # Also test basic file reading
+            with open(test_file.name, 'rb') as f:
+                # Read PCAP header
+                header = f.read(24)
+                magic = struct.unpack('>I', header[0:4])[0]
+                version_major = struct.unpack('>H', header[4:6])[0]
+                version_minor = struct.unpack('>H', header[6:8])[0]
+                
+                # Try to read first packet header
+                pkt_header = f.read(16)
+                pkt_header_len = len(pkt_header)
+                
+                # Try to read packet data
+                if pkt_header_len == 16:
+                    incl_len = struct.unpack('>I', pkt_header[8:12])[0]
+                    packet_data = f.read(incl_len)
+                    packet_data_len = len(packet_data)
+                else:
+                    incl_len = 0
+                    packet_data_len = 0
+            
             test_info = {
                 "test_pcap_created": True,
                 "test_file_size": len(test_pcap),
                 "test_analysis_result": result,
-                "test_success": 'error' not in result
+                "test_success": 'error' not in result,
+                "debug_info": {
+                    "pcap_header": {
+                        "magic": f"0x{magic:08x}",
+                        "version": f"{version_major}.{version_minor}",
+                        "header_size": len(header)
+                    },
+                    "packet_header": {
+                        "read_length": pkt_header_len,
+                        "expected_length": 16,
+                        "incl_len": incl_len
+                    },
+                    "packet_data": {
+                        "read_length": packet_data_len,
+                        "expected_length": incl_len
+                    }
+                }
             }
             
             return jsonify(test_info)
