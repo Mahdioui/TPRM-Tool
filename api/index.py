@@ -1213,5 +1213,8 @@ def analyze_pcap():
         traceback.print_exc()
         return jsonify({"success": False, "error": f"Analysis failed: {str(e)}"})
 
+# Vercel serverless function handler
+app.debug = False
+
 if __name__ == "__main__":
-    app.run()
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
