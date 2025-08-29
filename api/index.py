@@ -7,6 +7,13 @@ import json
 from collections import defaultdict
 import io
 import re
+import base64
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 # Try to import nlp_utils, provide fallback if not available
 try:
@@ -29,11 +36,60 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 class PcapAnalyzer:
     def __init__(self):
         self.threat_patterns = {
-            'suspicious_ports': [22, 23, 3389, 5900, 8080, 8443, 4444, 31337, 6667],
-            'suspicious_protocols': ['HTTP', 'FTP', 'TELNET'],
+            'suspicious_ports': [22, 23, 3389, 5900, 8080, 8443, 4444, 31337, 6667, 445, 135, 139, 1433, 1521, 3306, 5432, 6379, 27017],
+            'suspicious_protocols': ['HTTP', 'FTP', 'TELNET', 'SSH', 'RDP'],
             'malware_patterns': [
-                r'cmd\.exe', r'powershell', r'wget', r'curl', r'nc', r'ncat',
-                r'python\s+-c', r'perl\s+-e', r'bash\s+-c', r'\.exe\s+download'
+                # Command execution
+                r'cmd\.exe', r'powershell', r'wget', r'curl', r'nc', r'ncat', r'netcat',
+                r'python\s+-c', r'perl\s+-e', r'bash\s+-c', r'sh\s+-c', r'zsh\s+-c',
+                r'\.exe\s+download', r'\.exe\s+upload', r'\.exe\s+execute',
+                
+                # Malicious URLs and domains
+                r'http[s]?://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}', r'ftp://[a-zA-Z0-9\-\.]+',
+                r'[a-zA-Z0-9\-\.]+\.(tk|ml|ga|cf|gq|xyz|top|club|site|online)',
+                
+                # Data exfiltration patterns
+                r'password[s]?\s*=', r'user[name]?\s*=', r'login\s*=', r'auth\s*=',
+                r'credit.?card', r'cc.?num', r'card.?number', r'expiry', r'cvv',
+                r'ssn\s*=', r'social.?security', r'passport', r'license',
+                
+                # Network scanning patterns
+                r'port.?scan', r'nmap', r'zenmap', r'angry.?ip', r'advanced.?ip',
+                r'ping.?sweep', r'network.?discovery', r'host.?discovery',
+                
+                # Exploitation attempts
+                r'sql.?injection', r'xss', r'cross.?site', r'buffer.?overflow',
+                r'stack.?overflow', r'heap.?overflow', r'format.?string',
+                r'command.?injection', r'ldap.?injection', r'nosql.?injection',
+                
+                # Malware communication
+                r'beacon', r'callback', r'c2', r'command.?control', r'botnet',
+                r'keylogger', r'ransomware', r'trojan', r'backdoor', r'rootkit',
+                
+                # Suspicious file operations
+                r'\.(bat|cmd|ps1|vbs|js|hta|scr|pif|com|exe)\s+', r'file.?upload',
+                r'file.?download', r'file.?transfer', r'file.?copy', r'file.?move',
+                
+                # Encryption and obfuscation
+                r'base64', r'hex', r'rot13', r'caesar', r'xor', r'encrypt',
+                r'decrypt', r'hash', r'md5', r'sha1', r'sha256', r'bcrypt',
+                
+                # Social engineering
+                r'urgent', r'important', r'account.?suspended', r'verify.?account',
+                r'confirm.?details', r'update.?information', r'security.?alert',
+                r'login.?attempt', r'unusual.?activity', r'account.?locked'
+            ],
+            
+            'data_exfiltration_patterns': [
+                r'GET\s+/(?:api|rest|v1|v2)/[a-zA-Z0-9/]+', r'POST\s+/(?:api|rest|v1|v2)/[a-zA-Z0-9/]+',
+                r'PUT\s+/(?:api|rest|v1|v2)/[a-zA-Z0-9/]+', r'DELETE\s+/(?:api|rest|v1|v2)/[a-zA-Z0-9/]+',
+                r'Content-Type:\s*application/(?:json|xml|octet-stream)', r'Content-Length:\s*\d+',
+                r'Authorization:\s*Bearer\s+[a-zA-Z0-9\-\._]+', r'X-API-Key:\s*[a-zA-Z0-9\-\._]+'
+            ],
+            
+            'scanning_patterns': [
+                r'User-Agent:\s*(?:nmap|scanner|probe|bot|crawler)', r'Host:\s*[a-zA-Z0-9\-\.]+',
+                r'Accept:\s*\*/\*', r'Connection:\s*keep-alive', r'Cache-Control:\s*no-cache'
             ]
         }
     
@@ -288,36 +344,137 @@ class PcapAnalyzer:
             return {"error": f"Analysis failed: {str(e)}"}
     
     def _analyze_payload_nlp(self, payload, threats, suspicious_payloads, nlp_threats, encrypted_traffic, connection):
-        """Analyze payload using NLP and regex patterns"""
+        """Enhanced payload analysis using comprehensive regex patterns and NLP"""
         try:
-            # Regex pattern matching
+            payload_text = payload.decode('utf-8', errors='ignore')
+            payload_hex = payload.hex()
+            
+            # Enhanced malware pattern detection
             for pattern in self.threat_patterns['malware_patterns']:
-                if re.search(pattern, payload.decode('utf-8', errors='ignore'), re.IGNORECASE):
-                    threats.append(f"Malware pattern: {pattern}")
+                if re.search(pattern, payload_text, re.IGNORECASE):
+                    threat_desc = f"Malware pattern detected: {pattern}"
+                    threats.append(threat_desc)
                     suspicious_payloads.append({
                         'pattern': pattern,
                         'connection': connection,
-                        'payload_preview': payload[:200].hex()
+                        'payload_preview': payload_text[:200],
+                        'hex_preview': payload_hex[:100],
+                        'threat_type': 'malware_pattern'
                     })
             
-            # NLP analysis
-            nlp_result = nlp_analyzer.analyze_payload(payload)
+            # Data exfiltration detection
+            for pattern in self.threat_patterns['data_exfiltration_patterns']:
+                if re.search(pattern, payload_text, re.IGNORECASE):
+                    threat_desc = f"Data exfiltration pattern: {pattern}"
+                    threats.append(threat_desc)
+                    suspicious_payloads.append({
+                        'pattern': pattern,
+                        'connection': connection,
+                        'payload_preview': payload_text[:200],
+                        'hex_preview': payload_hex[:100],
+                        'threat_type': 'data_exfiltration'
+                    })
             
-            if nlp_result.get('text_analysis', {}).get('threat_score', 0) > 30:
-                nlp_threats.append(f"NLP threat detected: {nlp_result['text_analysis']['threat_level']} level")
+            # Network scanning detection
+            for pattern in self.threat_patterns['scanning_patterns']:
+                if re.search(pattern, payload_text, re.IGNORECASE):
+                    threat_desc = f"Scanning activity: {pattern}"
+                    threats.append(threat_desc)
+                    suspicious_payloads.append({
+                        'pattern': pattern,
+                        'connection': connection,
+                        'payload_preview': payload_text[:200],
+                        'hex_preview': payload_hex[:100],
+                        'threat_type': 'scanning'
+                    })
+            
+            # Enhanced entropy analysis for encrypted traffic detection
+            entropy_score = self._calculate_entropy(payload)
+            if entropy_score > 7.5:  # High entropy indicates encryption
+                encrypted_traffic += 1
+                if entropy_score > 8.0:
+                    threats.append(f"High entropy traffic detected (score: {entropy_score:.2f}) - possible encryption")
+            
+            # Binary analysis for executable content
+            if self._is_executable_content(payload):
+                threats.append("Executable content detected in payload")
                 suspicious_payloads.append({
-                    'nlp_analysis': nlp_result,
+                    'pattern': 'executable_content',
                     'connection': connection,
-                    'payload_preview': payload[:200].hex()
+                    'payload_preview': payload_hex[:200],
+                    'threat_type': 'executable'
                 })
             
-            # Check for encrypted traffic
-            if nlp_result.get('binary_analysis', {}).get('is_encrypted', False):
-                encrypted_traffic += 1
+            # NLP analysis (if available)
+            try:
+                nlp_result = nlp_analyzer.analyze_payload(payload)
+                if nlp_result.get('text_analysis', {}).get('threat_score', 0) > 30:
+                    nlp_threats.append(f"NLP threat detected: {nlp_result['text_analysis']['threat_level']} level")
+                    suspicious_payloads.append({
+                        'nlp_analysis': nlp_result,
+                        'connection': connection,
+                        'payload_preview': payload_text[:200],
+                        'threat_type': 'nlp_analysis'
+                    })
+            except:
+                pass
                 
-        except Exception:
+        except Exception as e:
             # Continue analysis even if payload parsing fails
             pass
+    
+    def _calculate_entropy(self, data):
+        """Calculate Shannon entropy of data to detect encryption"""
+        try:
+            if not data:
+                return 0
+            
+            # Count byte frequencies
+            byte_counts = [0] * 256
+            for byte in data:
+                byte_counts[byte] += 1
+            
+            # Calculate entropy
+            entropy = 0
+            data_len = len(data)
+            for count in byte_counts:
+                if count > 0:
+                    probability = count / data_len
+                    entropy -= probability * (probability.bit_length() - 1)
+            
+            return entropy
+        except:
+            return 0
+    
+    def _is_executable_content(self, data):
+        """Detect if payload contains executable content"""
+        try:
+            # Check for common executable signatures
+            executable_signatures = [
+                b'MZ',  # Windows PE
+                b'\x7fELF',  # Linux ELF
+                b'\xfe\xed\xfa',  # Mach-O
+                b'\xca\xfe\xba\xbe',  # Java class
+                b'#!/',  # Shebang
+            ]
+            
+            for sig in executable_signatures:
+                if data.startswith(sig):
+                    return True
+            
+            # Check for high frequency of printable ASCII (common in scripts)
+            printable_count = sum(1 for b in data if 32 <= b <= 126)
+            if len(data) > 50 and printable_count / len(data) > 0.8:
+                # Check for script keywords
+                script_keywords = [b'function', b'def ', b'class ', b'import ', b'require', b'include']
+                data_lower = data.lower()
+                for keyword in script_keywords:
+                    if keyword in data_lower:
+                        return True
+            
+            return False
+        except:
+            return False
     
     def _analyze_dns_nlp(self, dns_payload, nlp_threats, connection):
         """Analyze DNS payload using NLP"""
@@ -774,48 +931,47 @@ HTML_TEMPLATE = """
             resultsDiv.innerHTML = html;
         }
         
-        // Simple download functions that actually work
+        // Enhanced download functions with PDF generation
         function downloadFullReport(data) {
             try {
-                const content = `PCAP SECURITY ANALYSIS REPORT
-Generated: ${new Date().toLocaleString()}
-File: ${data.filename}
-Analysis Time: ${data.analysis_time}
-
-=== EXECUTIVE SUMMARY ===
-Total Packets: ${data.packet_count.toLocaleString()}
-Total Bytes: ${(data.total_bytes / 1024 / 1024).toFixed(2)} MB
-Risk Score: ${data.risk_score}/100
-Threats Detected: ${data.threats.length}
-
-=== PROTOCOL ANALYSIS ===
-${Object.entries(data.protocols).map(([proto, count]) => `${proto}: ${count.toLocaleString()} packets`).join('\\n')}
-
-=== CONNECTION ANALYSIS ===
-Total Connections: ${data.connection_analysis?.total_connections || 0}
-Unique Connections: ${data.connection_analysis?.unique_connections || 0}
-Unique IP Addresses: ${data.connection_analysis?.unique_ips || 0}
-
-=== THREAT ANALYSIS ===
-Regex Threats: ${data.threat_categories?.regex_threats?.length || 0}
-NLP Threats: ${data.threat_categories?.nlp_threats?.length || 0}
-Suspicious Payloads: ${data.threat_categories?.suspicious_payloads?.length || 0}
-
-${data.threats.length > 0 ? '\\nDetected Threats:\\n' + data.threats.map(threat => `- ${threat}`).join('\\n') : '\\nNo threats detected.'}
-
-=== SECURITY RECOMMENDATIONS ===
-${data.recommendations ? data.recommendations.map(rec => `- ${rec}`).join('\\n') : 'No specific recommendations.'}
-
-=== TECHNICAL DETAILS ===
-PCAP Version: ${data.file_info?.version || 'Unknown'}
-
---- End of Report ---`;
-
-                downloadFile(content, 'pcap_security_analysis_report.txt', 'text/plain');
+                // Generate PDF report
+                generatePDFReport(data, 'full');
             } catch (error) {
                 console.error('Download error:', error);
                 alert('Download failed. Please try again.');
             }
+        }
+        
+        function generatePDFReport(data, reportType) {
+            const reportData = {
+                type: reportType,
+                data: data,
+                timestamp: new Date().toLocaleString()
+            };
+            
+            // Send request to generate PDF
+            fetch('/generate-pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(reportData)
+            })
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `pcap_security_analysis_${reportType}_report.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                console.error('PDF generation failed:', error);
+                alert('PDF generation failed. Please try again.');
+            });
         }
         
         function downloadJSONData(data) {
@@ -864,6 +1020,127 @@ def health():
 @app.route('/')
 def home():
     return HTML_TEMPLATE
+
+@app.route('/generate-pdf', methods=['POST'])
+def generate_pdf():
+    """Generate PDF report from analysis data"""
+    try:
+        data = request.get_json()
+        if not data or 'data' not in data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+        
+        analysis_data = data['data']
+        report_type = data.get('type', 'full')
+        
+        # Create PDF
+        pdf_buffer = io.BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=A4)
+        story = []
+        
+        # Styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            spaceAfter=30,
+            alignment=TA_CENTER,
+            textColor=colors.darkblue
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            spaceAfter=12,
+            textColor=colors.darkblue
+        )
+        
+        # Title
+        story.append(Paragraph("PCAP Security Analysis Report", title_style))
+        story.append(Spacer(1, 20))
+        
+        # File Information
+        story.append(Paragraph(f"<b>File:</b> {analysis_data.get('filename', 'Unknown')}", styles['Normal']))
+        story.append(Paragraph(f"<b>Analysis Time:</b> {analysis_data.get('analysis_time', 'Unknown')}", styles['Normal']))
+        story.append(Paragraph(f"<b>Generated:</b> {data.get('timestamp', 'Unknown')}", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Executive Summary
+        story.append(Paragraph("Executive Summary", heading_style))
+        summary_data = [
+            ['Metric', 'Value'],
+            ['Total Packets', f"{analysis_data.get('packet_count', 0):,}"],
+            ['Total Size', f"{(analysis_data.get('total_bytes', 0) / 1024 / 1024):.2f} MB"],
+            ['Risk Score', f"{analysis_data.get('risk_score', 0)}/100"],
+            ['Threats Detected', f"{len(analysis_data.get('threats', []))}"],
+            ['Protocols Found', f"{len(analysis_data.get('protocols', {}))}"],
+        ]
+        
+        summary_table = Table(summary_data)
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(summary_table)
+        story.append(Spacer(1, 20))
+        
+        # Protocol Analysis
+        if analysis_data.get('protocols'):
+            story.append(Paragraph("Protocol Analysis", heading_style))
+            protocol_data = [['Protocol', 'Packet Count']]
+            for proto, count in analysis_data['protocols'].items():
+                protocol_data.append([proto, f"{count:,}"])
+            
+            protocol_table = Table(protocol_data)
+            protocol_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(protocol_table)
+            story.append(Spacer(1, 20))
+        
+        # Threat Analysis
+        if analysis_data.get('threats'):
+            story.append(Paragraph("Threat Analysis", heading_style))
+            for threat in analysis_data['threats']:
+                story.append(Paragraph(f"• {threat}", styles['Normal']))
+            story.append(Spacer(1, 20))
+        
+        # Security Recommendations
+        if analysis_data.get('recommendations'):
+            story.append(Paragraph("Security Recommendations", heading_style))
+            for rec in analysis_data['recommendations']:
+                story.append(Paragraph(f"• {rec}", styles['Normal']))
+            story.append(Spacer(1, 20))
+        
+        # Technical Details
+        story.append(Paragraph("Technical Details", heading_style))
+        story.append(Paragraph(f"PCAP Version: {analysis_data.get('file_info', {}).get('version', 'Unknown')}", styles['Normal']))
+        story.append(Paragraph(f"Total Size: {analysis_data.get('file_info', {}).get('total_size', 'Unknown')}", styles['Normal']))
+        
+        # Build PDF
+        doc.build(story)
+        pdf_buffer.seek(0)
+        
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'pcap_security_analysis_{report_type}_report.pdf'
+        )
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": f"PDF generation failed: {str(e)}"}), 500
 
 @app.route('/analyze', methods=['POST'])
 def analyze_pcap():
