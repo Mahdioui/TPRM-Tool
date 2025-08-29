@@ -554,6 +554,9 @@ HTML_TEMPLATE = """
         function displayResults(result) {
             const resultsDiv = document.getElementById('results');
             
+            console.log('Displaying results:', result);
+            console.log('Protocols found:', result.protocols);
+            
             let html = `
                 <div class="success">
                     <h3>🔍 Security Analysis Complete!</h3>
@@ -744,32 +747,24 @@ HTML_TEMPLATE = """
                 `;
             }
             
-            // Add downloadable reports section
+            // Add downloadable reports section (simplified to 2 options)
             html += `
                 <div class="section">
                     <h3>📊 Download Reports</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 15px 0;">
-                        <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #3498db;">
-                            <h4 style="color: #2c3e50; margin: 0 0 15px 0;">📄 Full Analysis Report</h4>
-                            <p style="color: #7f8c8d; margin: 0 0 15px 0;">Comprehensive security analysis with all findings</p>
-                            <button onclick="downloadReport('full', ${JSON.stringify(result)})" style="background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 15px 0;">
+                        <div style="background: #f0f9ff; padding: 25px; border-radius: 8px; text-align: center; border: 2px solid #3498db;">
+                            <h4 style="color: #2c3e50; margin: 0 0 15px 0;">📄 Full Security Report</h4>
+                            <p style="color: #7f8c8d; margin: 0 0 20px 0;">Complete analysis with all findings and recommendations</p>
+                            <button onclick="downloadFullReport(${JSON.stringify(result).replace(/"/g, '&quot;')})" style="background: #3498db; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;">
                                 📥 Download Full Report
                             </button>
                         </div>
                         
-                        <div style="background: #fff9f0; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #f39c12;">
+                        <div style="background: #fff9f0; padding: 25px; border-radius: 8px; text-align: center; border: 2px solid #f39c12;">
                             <h4 style="color: #2c3e50; margin: 0 0 15px 0;">📊 Analysis Data (JSON)</h4>
-                            <p style="color: #7f8c8d; margin: 0 0 15px 0;">Raw analysis data for further processing</p>
-                            <button onclick="downloadReport('json', ${JSON.stringify(result)})" style="background: #f39c12; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                            <p style="color: #7f8c8d; margin: 0 0 20px 0;">Raw data for further processing and integration</p>
+                            <button onclick="downloadJSONData(${JSON.stringify(result).replace(/"/g, '&quot;')})" style="background: #f39c12; color: white; border: none; padding: 12px 25px; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold;">
                                 📥 Download JSON Data
-                            </button>
-                        </div>
-                        
-                        <div style="background: #f0f9f0; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #27ae60;">
-                            <h4 style="color: #2c3e50; margin: 0 0 15px 0;">🔒 Executive Summary</h4>
-                            <p style="color: #7f8c8d; margin: 0 0 15px 0;">High-level security overview for stakeholders</p>
-                            <button onclick="downloadReport('executive', ${JSON.stringify(result)})" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;">
-                                📥 Download Summary
                             </button>
                         </div>
                     </div>
@@ -779,41 +774,10 @@ HTML_TEMPLATE = """
             resultsDiv.innerHTML = html;
         }
         
-        // Function to handle report downloads
-        function downloadReport(type, data) {
-            let content, filename, mimeType;
-            
-            switch(type) {
-                case 'full':
-                    content = generateFullReport(data);
-                    filename = 'pcap_security_analysis_full_report.txt';
-                    mimeType = 'text/plain';
-                    break;
-                case 'json':
-                    content = JSON.stringify(data, null, 2);
-                    filename = 'pcap_analysis_data.json';
-                    mimeType = 'application/json';
-                    break;
-                case 'executive':
-                    content = generateExecutiveSummary(data);
-                    filename = 'pcap_executive_summary.txt';
-                    mimeType = 'text/plain';
-                    break;
-            }
-            
-            const blob = new Blob([content], { type: mimeType });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }
-        
-        function generateFullReport(data) {
-            return `PCAP SECURITY ANALYSIS REPORT
+        // Simple download functions that actually work
+        function downloadFullReport(data) {
+            try {
+                const content = `PCAP SECURITY ANALYSIS REPORT
 Generated: ${new Date().toLocaleString()}
 File: ${data.filename}
 Analysis Time: ${data.analysis_time}
@@ -832,12 +796,6 @@ Total Connections: ${data.connection_analysis?.total_connections || 0}
 Unique Connections: ${data.connection_analysis?.unique_connections || 0}
 Unique IP Addresses: ${data.connection_analysis?.unique_ips || 0}
 
-=== TOP IP ADDRESSES ===
-${Object.entries(data.top_ips).map(([ip, count]) => `${ip}: ${count.toLocaleString()} packets`).join('\\n')}
-
-=== TOP PORTS ===
-${Object.entries(data.top_ports).map(([port, count]) => `Port ${port}: ${count.toLocaleString()} packets`).join('\\n')}
-
 === THREAT ANALYSIS ===
 Regex Threats: ${data.threat_categories?.regex_threats?.length || 0}
 NLP Threats: ${data.threat_categories?.nlp_threats?.length || 0}
@@ -850,44 +808,36 @@ ${data.recommendations ? data.recommendations.map(rec => `- ${rec}`).join('\\n')
 
 === TECHNICAL DETAILS ===
 PCAP Version: ${data.file_info?.version || 'Unknown'}
-Byte Order: ${data.file_info?.byte_order || 'Unknown'}
-Link Type: ${data.file_info?.link_type || 'Unknown'}
 
 --- End of Report ---`;
+
+                downloadFile(content, 'pcap_security_analysis_report.txt', 'text/plain');
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Download failed. Please try again.');
+            }
         }
         
-        function generateExecutiveSummary(data) {
-            const riskLevel = data.risk_score > 70 ? 'CRITICAL' : 
-                             data.risk_score > 50 ? 'HIGH' : 
-                             data.risk_score > 30 ? 'MEDIUM' : 'LOW';
-            
-            return `PCAP SECURITY ANALYSIS - EXECUTIVE SUMMARY
-Generated: ${new Date().toLocaleString()}
-File: ${data.filename}
-
-=== SECURITY STATUS ===
-Risk Level: ${riskLevel}
-Risk Score: ${data.risk_score}/100
-Overall Assessment: ${data.risk_score > 70 ? 'Immediate action required' : 
-                                    data.risk_score > 50 ? 'Security review recommended' : 
-                                    data.risk_score > 30 ? 'Monitor for suspicious activity' : 'Standard security practices sufficient'}
-
-=== KEY FINDINGS ===
-- Total packets analyzed: ${data.packet_count.toLocaleString()}
-- Protocols detected: ${Object.keys(data.protocols).length}
-- Threats identified: ${data.threats.length}
-- Network activity: ${data.connection_analysis?.unique_ips || 0} unique IP addresses
-
-=== RECOMMENDATIONS ===
-${data.recommendations ? data.recommendations.slice(0, 3).map(rec => `- ${rec}`).join('\\n') : 'Continue regular security monitoring.'}
-
-=== NEXT STEPS ===
-${data.risk_score > 70 ? '1. Immediate security incident response\\n2. Contact security team\\n3. Conduct full network audit' :
-  data.risk_score > 50 ? '1. Schedule security assessment\\n2. Review access controls\\n3. Enhance monitoring' :
-  data.risk_score > 30 ? '1. Monitor network patterns\\n2. Review security logs\\n3. Update security policies' :
-  '1. Continue regular monitoring\\n2. Maintain security practices\\n3. Regular security reviews'}
-
---- End of Summary ---`;
+        function downloadJSONData(data) {
+            try {
+                const content = JSON.stringify(data, null, 2);
+                downloadFile(content, 'pcap_analysis_data.json', 'application/json');
+            } catch (error) {
+                console.error('Download error:', error);
+                alert('Download failed. Please try again.');
+            }
+        }
+        
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
         }
     </script>
 </body>
