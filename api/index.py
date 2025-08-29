@@ -75,12 +75,14 @@ class PcapAnalyzer:
                 
                 print(f"Starting PCAP analysis of {file_path}")
                 print(f"File size: {os.path.getsize(file_path)} bytes")
+                print(f"PCAP header: magic=0x{magic:08x}, version={version_major}.{version_minor}, linktype={linktype}")
                 
                 while True:
                     # Read packet header (16 bytes)
                     pkt_header = f.read(16)
                     if len(pkt_header) < 16:
                         print(f"End of file reached after {packet_count} packets")
+                        print(f"Remaining bytes: {len(pkt_header)}")
                         break
                     
                     # Parse packet header
@@ -89,7 +91,10 @@ class PcapAnalyzer:
                     incl_len = struct.unpack(f'{byte_order}I', pkt_header[8:12])[0]
                     orig_len = struct.unpack(f'{byte_order}I', pkt_header[12:16])[0]
                     
+                    print(f"Packet header: ts_sec={ts_sec}, incl_len={incl_len}, orig_len={orig_len}")
+                    
                     if incl_len == 0:
+                        print(f"Skipping packet with 0 length")
                         continue
                     
                     # Track timing
@@ -107,6 +112,8 @@ class PcapAnalyzer:
                     packet_count += 1
                     total_bytes += incl_len
                     
+                    print(f"Read packet {packet_count}: {len(packet_data)} bytes")
+                    
                     if packet_count % 100 == 0:
                         print(f"Processed {packet_count} packets...")
                     
@@ -114,8 +121,11 @@ class PcapAnalyzer:
                     if len(packet_data) >= 14:
                         eth_type = struct.unpack(f'{byte_order}H', packet_data[12:14])[0]
                         
+                        print(f"  Ethernet type: 0x{eth_type:04x}")
+                        
                         if eth_type == 0x0800 and len(packet_data) >= 34:  # IPv4
                             protocols['IP'] += 1
+                            print(f"  IPv4 packet detected")
                             
                             # Extract IP addresses - handle different Ethernet frame formats
                             # Standard Ethernet frame: 14 bytes header + 20 bytes IP header
@@ -126,6 +136,8 @@ class PcapAnalyzer:
                                 ips[src_ip] += 1
                                 ips[dst_ip] += 1
                                 
+                                print(f"  IP addresses: {src_ip} -> {dst_ip}")
+                                
                                 # Debug logging for first few packets
                                 if packet_count <= 5:
                                     print(f"Packet {packet_count}: {src_ip} -> {dst_ip}")
@@ -133,15 +145,19 @@ class PcapAnalyzer:
                                 # Check protocol (offset 23 for protocol field)
                                 if len(packet_data) >= 35:
                                     ip_proto = packet_data[23]
+                                    print(f"  IP protocol: {ip_proto}")
                                     
                                     if ip_proto == 6:  # TCP
                                         protocols['TCP'] += 1
+                                        print(f"  TCP packet detected")
                                         if len(packet_data) >= 38:
                                             # TCP ports are at offset 34-36 and 36-38
                                             src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
                                             dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
                                             ports[src_port] += 1
                                             ports[dst_port] += 1
+                                            
+                                            print(f"  TCP ports: {src_port} -> {dst_port}")
                                             
                                             # Debug logging for first few TCP packets
                                             if packet_count <= 5:
@@ -175,12 +191,15 @@ class PcapAnalyzer:
                                     
                                     elif ip_proto == 17:  # UDP
                                         protocols['UDP'] += 1
+                                        print(f"  UDP packet detected")
                                         if len(packet_data) >= 38:
                                             # UDP ports are at offset 34-36 and 36-38
                                             src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
                                             dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
                                             ports[src_port] += 1
                                             ports[dst_port] += 1
+                                            
+                                            print(f"  UDP ports: {src_port} -> {dst_port}")
                                             
                                             # Debug logging for first few UDP packets
                                             if packet_count <= 5:
@@ -194,6 +213,7 @@ class PcapAnalyzer:
                                     
                                     elif ip_proto == 1:  # ICMP
                                         protocols['ICMP'] += 1
+                                        print(f"  ICMP packet detected")
                                         # Check for ping sweeps (ICMP header starts at offset 34)
                                         if len(packet_data) >= 38:
                                             icmp_type = packet_data[34]
@@ -202,6 +222,7 @@ class PcapAnalyzer:
                         
                         elif eth_type == 0x0806:  # ARP
                             protocols['ARP'] += 1
+                            print(f"  ARP packet detected")
                             # Check for ARP spoofing (ARP header starts at offset 14)
                             if len(packet_data) >= 22:
                                 arp_op = struct.unpack(f'{byte_order}H', packet_data[20:22])[0]
@@ -215,6 +236,8 @@ class PcapAnalyzer:
                                 print(f"  Ethernet header: {packet_data[:14].hex()}")
                             if len(packet_data) >= 34 and eth_type == 0x0800:
                                 print(f"  IP header: {packet_data[14:34].hex()}")
+                    else:
+                        print(f"  Packet too short for Ethernet analysis: {len(packet_data)} bytes")
                 
                 print(f"Analysis complete: {packet_count} packets, {total_bytes} bytes")
                 print(f"Protocols found: {dict(protocols)}")
