@@ -1,3 +1,2 @@
-# Minimal dependencies for Vercel deployment
 Flask==2.3.3
 Werkzeug==2.3.7

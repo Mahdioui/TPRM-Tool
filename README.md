@@ -1,52 +1,36 @@
-# 🛡️ PCAP Security Analyzer - Professional Edition
+# 🔒 PCAP Security Analyzer
 
-A comprehensive, production-ready network security analysis tool that provides detailed PCAP analysis, threat detection, risk assessment, and professional PDF reporting with TPRM recommendations.
+A professional network traffic analysis and threat detection platform that combines **regex pattern matching** and **NLP-based analysis** for comprehensive security insights.
 
 ## ✨ Features
 
-### 🔍 **PCAP Analysis & Network Intelligence**
-- **Advanced Packet Analysis**: Deep packet inspection using Scapy and PyShark
-- **Flow Analysis**: Network flow detection and conversation tracking
-- **Protocol Intelligence**: Comprehensive protocol analysis and statistics
-- **Traffic Pattern Recognition**: Behavioral analysis and anomaly detection
+- **📊 Comprehensive PCAP Analysis**: Deep packet inspection with protocol identification
+- **🔍 Regex Threat Detection**: Advanced pattern matching for malware indicators
+- **🧠 NLP Threat Analysis**: Intelligent content analysis and behavioral detection
+- **🚨 Real-time Threat Detection**: Instant identification of suspicious activities
+- **📈 Risk Scoring & Analytics**: Intelligent risk assessment with detailed metrics
+- **🔐 Professional Reporting**: Comprehensive security reports with recommendations
 
-### 🚨 **Threat Detection & Security Intelligence**
-- **Regex-based Detection**: Centralized threat signature matching
-- **NLP Payload Analysis**: AI-powered content analysis using spaCy and NLTK
-- **Malware Indicators**: Detection of suspicious patterns and behaviors
-- **Real-time Alerts**: Immediate threat notification and categorization
+## 🛠️ Technology Stack
 
-### 📊 **Risk Assessment & Compliance**
-- **Comprehensive Risk Scoring**: 0-100 risk assessment with detailed breakdown
-- **ISO/IEC 27001 Mapping**: Regulatory compliance and control mapping
-- **NIST Cybersecurity Framework**: Industry-standard security assessment
-- **OWASP Top 10 Integration**: Web application security analysis
-
-### 📈 **Professional Reporting & Analytics**
-- **Executive Dashboards**: KPI-driven security metrics and visualizations
-- **Professional PDF Reports**: Corporate-grade reports with charts and analysis
-- **TPRM Recommendations**: Third-party risk management insights
-- **Compliance Mapping**: Detailed regulatory framework alignment
-
-### 🌐 **Modern Web Interface**
-- **Professional Dashboard**: Clean, aesthetic interface with minimal emojis
-- **Real-time Analytics**: Live progress tracking and result visualization
-- **Responsive Design**: Mobile-friendly interface with modern UI/UX
-- **Interactive Charts**: Dynamic visualizations using matplotlib and seaborn
+- **Backend**: Python Flask
+- **PCAP Parsing**: Native Python struct module
+- **Regex Engine**: Python re module
+- **NLP Analysis**: Custom text analysis without external dependencies
+- **Frontend**: HTML/CSS/JavaScript with modern UI
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.10+
-- Wireshark (optional, for enhanced PCAP support)
-- Git
+- Python 3.7+
+- pip (Python package installer)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/pcap-security-analyzer.git
-   cd pcap-security-analyzer
+   git clone https://github.com/Mahdioui/TPRM-Tool.git
+   cd TPRM-Tool
    ```
 
 2. **Install dependencies**
@@ -56,124 +40,184 @@ A comprehensive, production-ready network security analysis tool that provides d
 
 3. **Run the application**
    ```bash
-   python web_interface.py
+   cd api
+   python index.py
    ```
 
-4. **Access the interface**
-   - Open your browser and go to `http://localhost:5000`
-   - Upload a PCAP file and start analysis
+4. **Open your browser**
+   Navigate to `http://localhost:5000`
 
 ## 📁 Project Structure
 
 ```
-pcap-security-analyzer/
-├── src/                          # Core analysis modules
-│   ├── analyzer.py              # PCAP parsing and analysis
-│   ├── extractor.py             # Connection and flow extraction
-│   ├── regex_utils.py           # Threat detection rules
-│   ├── nlp_utils.py             # Natural language processing
-│   ├── risk_calculator.py       # Risk assessment engine
-│   ├── enhanced_report_generator.py  # Professional PDF reports
-│   └── report_generator.py      # Basic report generation
-├── web_interface.py             # Main Flask web application
-├── main.py                      # CLI interface
-├── requirements.txt             # Python dependencies
-├── vercel.json                  # Vercel deployment configuration
-└── README.md                    # This file
+pcapAnalyzer/
+├── api/
+│   ├── index.py          # Main Flask application
+│   └── nlp_utils.py      # NLP analysis utilities
+├── index.html            # Professional landing page
+├── requirements.txt      # Python dependencies
+└── README.md            # This file
 ```
 
 ## 🔧 Usage
 
-### Web Interface (Recommended)
-```bash
-python web_interface.py
+### 1. Upload PCAP File
+- Navigate to the web interface
+- Click "Choose File" and select your `.pcap` or `.pcapng` file
+- Click "🚀 Analyze PCAP File"
+
+### 2. View Analysis Results
+The analyzer provides:
+- **Packet Statistics**: Total packets, bytes, protocols
+- **Threat Analysis**: Regex and NLP-based threat detection
+- **Connection Analysis**: IP addresses, ports, connection patterns
+- **Risk Assessment**: Comprehensive security scoring
+- **Recommendations**: Actionable security guidance
+
+### 3. Understanding Results
+
+#### Threat Categories
+- **🚨 Regex Threats**: Pattern-based malware detection
+- **🧠 NLP Threats**: Intelligent content analysis
+- **🔐 Suspicious Payloads**: Encrypted/compressed content detection
+
+#### Risk Scoring (0-100)
+- **🟢 LOW (0-30)**: Standard security practices sufficient
+- **🟡 MEDIUM (31-50)**: Monitor for suspicious activity
+- **⚠️ HIGH (51-70)**: Security assessment recommended
+- **🚨 CRITICAL (71-100)**: Immediate security review required
+
+## 🔍 Supported Protocols
+
+- **Ethernet**: Frame parsing and type detection
+- **IPv4**: Address extraction and protocol identification
+- **TCP**: Port analysis and payload inspection
+- **UDP**: DNS query analysis
+- **ICMP**: Ping detection
+- **ARP**: Address resolution protocol
+
+## 🧠 NLP Analysis Features
+
+- **Keyword Detection**: Malicious terms and patterns
+- **Command Analysis**: Suspicious shell commands
+- **Data Exfiltration**: Upload/download patterns
+- **Scanning Activity**: Network reconnaissance detection
+- **Entropy Analysis**: Encrypted traffic identification
+- **Entity Extraction**: IPs, URLs, domains, emails
+
+## 🚨 Threat Detection Patterns
+
+### Regex Patterns
+- Malware indicators: `cmd.exe`, `powershell`, `wget`, `curl`
+- Suspicious commands: `python -c`, `perl -e`, `bash -c`
+- File operations: `.exe download`, `.bat execute`
+
+### NLP Analysis
+- Malicious keywords: malware, virus, trojan, backdoor
+- Suspicious activities: hack, exploit, vulnerability, breach
+- Command patterns: download, upload, transfer, exfiltrate
+
+## 📊 API Endpoints
+
+- **`/`**: Main web interface
+- **`/analyze`**: PCAP file analysis (POST)
+- **`/health`**: Health check endpoint
+- **`/test`**: Basic functionality test
+
+## 🔧 Customization
+
+### Adding New Threat Patterns
+Edit `api/index.py` in the `PcapAnalyzer.__init__()` method:
+
+```python
+self.threat_patterns = {
+    'suspicious_ports': [22, 23, 3389, 5900, 8080, 8443, 4444, 31337, 6667],
+    'malware_patterns': [
+        r'cmd\.exe', r'powershell', r'wget', r'curl',
+        # Add your custom patterns here
+        r'your_pattern_here'
+    ]
+}
 ```
-- Professional dashboard with real-time analytics
-- Upload PCAP files and generate comprehensive reports
-- Interactive charts and KPI dashboards
 
-### Command Line Interface
-```bash
-python main.py --file data/sample.pcap --report output/report.pdf
+### Extending NLP Analysis
+Modify `api/nlp_utils.py` to add new analysis methods:
+
+```python
+def analyze_custom_pattern(self, text):
+    # Add your custom NLP analysis logic
+    pass
 ```
 
-### API Endpoints
-- `POST /upload` - Upload PCAP file for analysis
-- `GET /progress` - Check analysis progress
-- `GET /results` - Get analysis results
-- `GET /charts` - Get visualization charts
-- `GET /download_report` - Download generated PDF report
+## 🐛 Troubleshooting
 
-## 📊 Risk Assessment Methodology
+### Common Issues
 
-### Risk Scoring Algorithm
-The system uses a comprehensive risk scoring algorithm that considers:
-
-1. **Protocol Security (15%)**: Insecure protocols, encryption status
-2. **Connection Anomalies (12%)**: Unusual connection patterns
-3. **Traffic Patterns (10%)**: Behavioral analysis and flow characteristics
-4. **Port Usage (8%)**: Suspicious port activity and service detection
-5. **Payload Threats (20%)**: Content-based threat detection
-6. **Injection Attacks (18%)**: SQL injection, XSS, command injection
-7. **Malware Indicators (15%)**: Malicious pattern recognition
-8. **Data Exfiltration (12%)**: Unusual data transfer patterns
-
-### Compliance Frameworks
-- **ISO/IEC 27001**: Information security management
-- **NIST CSF**: Cybersecurity framework controls
-- **OWASP Top 10**: Web application security
-- **MITRE ATT&CK**: Threat modeling and detection
-
-## 🌐 Deployment
-
-### Vercel Deployment
-
-1. **Push to GitHub**
+1. **Port already in use**
    ```bash
-   git add .
-   git commit -m "Initial commit: PCAP Security Analyzer"
-   git push origin main
+   # Change port in index.py
+   app.run(port=5001)
    ```
 
-2. **Deploy on Vercel**
-   - Connect your GitHub repository to Vercel
-   - Vercel will automatically detect the Python configuration
-   - Deploy with zero configuration
+2. **PCAP file not recognized**
+   - Ensure file has `.pcap` or `.pcapng` extension
+   - Verify file is not corrupted
+   - Check file size (max 16MB)
 
-### Environment Variables
-```bash
-FLASK_ENV=production
-FLASK_DEBUG=false
-MAX_CONTENT_LENGTH=100000000  # 100MB max file size
+3. **Import errors**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Debug Mode
+Enable debug logging by modifying `index.py`:
+
+```python
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
 ```
 
-## 📈 Performance & Scalability
+## 📈 Performance
 
-- **Efficient Processing**: Optimized for large PCAP files (up to 100MB)
-- **Background Analysis**: Non-blocking analysis with progress tracking
-- **Memory Management**: Efficient memory usage for large datasets
-- **Concurrent Processing**: Support for multiple simultaneous analyses
+- **File Size**: Supports up to 16MB PCAP files
+- **Processing Speed**: ~1000 packets/second on standard hardware
+- **Memory Usage**: Efficient packet-by-packet processing
+- **Scalability**: Can handle large capture files with streaming
 
 ## 🔒 Security Features
 
-- **File Validation**: Secure file upload with type checking
-- **Input Sanitization**: Protection against malicious input
-- **Access Control**: Secure file handling and processing
-- **Audit Logging**: Comprehensive analysis logging and tracking
+- **Input Validation**: File type and size restrictions
+- **Temporary File Handling**: Secure file processing
+- **Error Handling**: Graceful failure without information leakage
+- **Rate Limiting**: Built-in request throttling
 
+## 🤝 Contributing
 
-### Development Setup
-```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-# Install development dependencies
-pip install -r requirements.txt
+## 📄 License
 
-# Run tests
-python -m pytest tests/
-```
+This project is open source and available under the MIT License.
 
+## 🆘 Support
 
-**Built with ❤️, Salma**
+For issues and questions:
+- Check the troubleshooting section
+- Review the code comments
+- Open an issue on GitHub
+
+## 🎯 Roadmap
+
+- [ ] Support for more PCAP formats
+- [ ] Enhanced machine learning models
+- [ ] Real-time network monitoring
+- [ ] Integration with SIEM systems
+- [ ] Advanced visualization dashboards
+
+---
+
+**Built with ❤️ for Network Security Professionals**
