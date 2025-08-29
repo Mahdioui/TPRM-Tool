@@ -102,6 +102,7 @@ class PcapAnalyzer:
                         if packet_count <= 5:
                             print(f"Packet {packet_count}: eth_type=0x{eth_type:04x}, len={len(packet_data)}")
                         
+                        # Handle different Ethernet types
                         if eth_type == 0x0800 and len(packet_data) >= 34:  # IPv4
                             protocols['IP'] += 1
                             
@@ -178,6 +179,48 @@ class PcapAnalyzer:
                         
                         elif eth_type == 0x0806:  # ARP
                             protocols['ARP'] += 1
+                            if packet_count <= 5:
+                                print(f"  ARP packet detected")
+                            
+                            # Extract ARP information if possible
+                            if len(packet_data) >= 42:  # ARP header is 28 bytes + 14 bytes Ethernet
+                                arp_op = struct.unpack(f'{byte_order}H', packet_data[20:22])[0]
+                                if arp_op == 1:  # ARP Request
+                                    if packet_count <= 5:
+                                        print(f"    ARP Request")
+                                elif arp_op == 2:  # ARP Reply
+                                    if packet_count <= 5:
+                                        print(f"    ARP Reply")
+                        
+                        elif eth_type == 0x0808:  # ARP (alternative)
+                            protocols['ARP'] += 1
+                            if packet_count <= 5:
+                                print(f"  ARP packet detected (alt)")
+                        
+                        elif eth_type == 0xa8c0:  # Custom/Proprietary protocol
+                            protocols['CUSTOM'] += 1
+                            if packet_count <= 5:
+                                print(f"  Custom protocol packet (0xa8c0)")
+                        
+                        elif eth_type == 0x0101:  # Another custom protocol
+                            protocols['CUSTOM'] += 1
+                            if packet_count <= 5:
+                                print(f"  Custom protocol packet (0x0101)")
+                        
+                        else:
+                            # Unknown protocol
+                            protocols['UNKNOWN'] += 1
+                            if packet_count <= 5:
+                                print(f"  Unknown protocol: 0x{eth_type:04x}")
+                            
+                            # Try to extract any readable text from unknown protocols
+                            try:
+                                text_content = packet_data.decode('utf-8', errors='ignore')
+                                if len(text_content) > 10 and any(c.isprintable() for c in text_content):
+                                    if packet_count <= 5:
+                                        print(f"    Text content: {text_content[:50]}...")
+                            except:
+                                pass
                 
                 # Calculate metrics
                 duration = 0  # Simplified for now
