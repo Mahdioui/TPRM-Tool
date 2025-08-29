@@ -117,73 +117,88 @@ class PcapAnalyzer:
                         if eth_type == 0x0800 and len(packet_data) >= 34:  # IPv4
                             protocols['IP'] += 1
                             
-                            # Extract IP addresses (correct offset: 26-30 for src, 30-34 for dst)
-                            src_ip = '.'.join(str(x) for x in packet_data[26:30])
-                            dst_ip = '.'.join(str(x) for x in packet_data[30:34])
-                            ips[src_ip] += 1
-                            ips[dst_ip] += 1
-                            
-                            # Check protocol (offset 23 for protocol field)
-                            if len(packet_data) >= 35:
-                                ip_proto = packet_data[23]
+                            # Extract IP addresses - handle different Ethernet frame formats
+                            # Standard Ethernet frame: 14 bytes header + 20 bytes IP header
+                            # IP addresses start at offset 26 (14 + 12) for source, 30 (14 + 16) for destination
+                            if len(packet_data) >= 34:
+                                src_ip = '.'.join(str(x) for x in packet_data[26:30])
+                                dst_ip = '.'.join(str(x) for x in packet_data[30:34])
+                                ips[src_ip] += 1
+                                ips[dst_ip] += 1
                                 
-                                if ip_proto == 6:  # TCP
-                                    protocols['TCP'] += 1
-                                    if len(packet_data) >= 38:
-                                        # TCP ports are at offset 34-36 and 36-38
-                                        src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
-                                        dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
-                                        ports[src_port] += 1
-                                        ports[dst_port] += 1
-                                        
-                                        # Check for suspicious ports
-                                        if src_port in self.threat_patterns['suspicious_ports'] or \
-                                           dst_port in self.threat_patterns['suspicious_ports']:
-                                            threats.append(f"Suspicious port usage: {src_port}->{dst_port}")
-                                        
-                                        # Track connections
-                                        connection = {
-                                            'src_ip': src_ip,
-                                            'dst_ip': dst_ip,
-                                            'src_port': src_port,
-                                            'dst_port': dst_port,
-                                            'protocol': 'TCP',
-                                            'size': incl_len,
-                                            'timestamp': ts_sec
-                                        }
-                                        connections.append(connection)
-                                        
-                                        # Analyze payload for threats (TCP header is 20 bytes, so payload starts at offset 54)
-                                        tcp_header_len = ((packet_data[46] >> 4) & 0xF) * 4  # Get TCP header length
-                                        payload_start = 34 + tcp_header_len  # IP header (20) + TCP header
-                                        if len(packet_data) > payload_start:
-                                            payload = packet_data[payload_start:]
-                                            self._analyze_payload(payload, threats, suspicious_payloads, 
-                                                               http_requests, file_transfers, scanning_activity,
-                                                               connection, encrypted_traffic)
+                                # Debug logging for first few packets
+                                if packet_count <= 5:
+                                    print(f"Packet {packet_count}: {src_ip} -> {dst_ip}")
                                 
-                                elif ip_proto == 17:  # UDP
-                                    protocols['UDP'] += 1
-                                    if len(packet_data) >= 38:
-                                        # UDP ports are at offset 34-36 and 36-38
-                                        src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
-                                        dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
-                                        ports[src_port] += 1
-                                        ports[dst_port] += 1
-                                        
-                                        # Analyze DNS queries (UDP header is 8 bytes, so payload starts at offset 42)
-                                        if src_port == 53 or dst_port == 53:
-                                            if len(packet_data) >= 42:
-                                                dns_payload = packet_data[42:]
-                                                self._analyze_dns_packet(dns_payload, dns_queries, connection)
-                                
-                                elif ip_proto == 1:  # ICMP
-                                    protocols['ICMP'] += 1
-                                    # Check for ping sweeps (ICMP header starts at offset 34)
-                                    if len(packet_data) >= 38:
-                                        icmp_type = packet_data[34]
-                                        if icmp_type == 8:  # Echo request
-                                            threats.append(f"ICMP ping detected from {src_ip}")
+                                # Check protocol (offset 23 for protocol field)
+                                if len(packet_data) >= 35:
+                                    ip_proto = packet_data[23]
+                                    
+                                    if ip_proto == 6:  # TCP
+                                        protocols['TCP'] += 1
+                                        if len(packet_data) >= 38:
+                                            # TCP ports are at offset 34-36 and 36-38
+                                            src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
+                                            dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
+                                            ports[src_port] += 1
+                                            ports[dst_port] += 1
+                                            
+                                            # Debug logging for first few TCP packets
+                                            if packet_count <= 5:
+                                                print(f"  TCP: {src_port} -> {dst_port}")
+                                            
+                                            # Check for suspicious ports
+                                            if src_port in self.threat_patterns['suspicious_ports'] or \
+                                               dst_port in self.threat_patterns['suspicious_ports']:
+                                                threats.append(f"Suspicious port usage: {src_port}->{dst_port}")
+                                            
+                                            # Track connections
+                                            connection = {
+                                                'src_ip': src_ip,
+                                                'dst_ip': dst_ip,
+                                                'src_port': src_port,
+                                                'dst_port': dst_port,
+                                                'protocol': 'TCP',
+                                                'size': incl_len,
+                                                'timestamp': ts_sec
+                                            }
+                                            connections.append(connection)
+                                            
+                                            # Analyze payload for threats (TCP header is 20 bytes, so payload starts at offset 54)
+                                            tcp_header_len = ((packet_data[46] >> 4) & 0xF) * 4  # Get TCP header length
+                                            payload_start = 34 + tcp_header_len  # IP header (20) + TCP header
+                                            if len(packet_data) > payload_start:
+                                                payload = packet_data[payload_start:]
+                                                self._analyze_payload(payload, threats, suspicious_payloads, 
+                                                                   http_requests, file_transfers, scanning_activity,
+                                                                   connection, encrypted_traffic)
+                                    
+                                    elif ip_proto == 17:  # UDP
+                                        protocols['UDP'] += 1
+                                        if len(packet_data) >= 38:
+                                            # UDP ports are at offset 34-36 and 36-38
+                                            src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
+                                            dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
+                                            ports[src_port] += 1
+                                            ports[dst_port] += 1
+                                            
+                                            # Debug logging for first few UDP packets
+                                            if packet_count <= 5:
+                                                print(f"  UDP: {src_port} -> {dst_port}")
+                                            
+                                            # Analyze DNS queries (UDP header is 8 bytes, so payload starts at offset 42)
+                                            if src_port == 53 or dst_port == 53:
+                                                if len(packet_data) >= 42:
+                                                    dns_payload = packet_data[42:]
+                                                    self._analyze_dns_packet(dns_payload, dns_queries, connection)
+                                    
+                                    elif ip_proto == 1:  # ICMP
+                                        protocols['ICMP'] += 1
+                                        # Check for ping sweeps (ICMP header starts at offset 34)
+                                        if len(packet_data) >= 38:
+                                            icmp_type = packet_data[34]
+                                            if icmp_type == 8:  # Echo request
+                                                threats.append(f"ICMP ping detected from {src_ip}")
                         
                         elif eth_type == 0x0806:  # ARP
                             protocols['ARP'] += 1
@@ -192,6 +207,14 @@ class PcapAnalyzer:
                                 arp_op = struct.unpack(f'{byte_order}H', packet_data[20:22])[0]
                                 if arp_op == 1:  # ARP request
                                     threats.append(f"ARP request from {src_ip}")
+                        
+                        # Debug: show packet structure for first few packets
+                        if packet_count <= 3:
+                            print(f"Packet {packet_count}: eth_type=0x{eth_type:04x}, length={len(packet_data)}, incl_len={incl_len}")
+                            if len(packet_data) >= 14:
+                                print(f"  Ethernet header: {packet_data[:14].hex()}")
+                            if len(packet_data) >= 34 and eth_type == 0x0800:
+                                print(f"  IP header: {packet_data[14:34].hex()}")
                 
                 print(f"Analysis complete: {packet_count} packets, {total_bytes} bytes")
                 print(f"Protocols found: {dict(protocols)}")
