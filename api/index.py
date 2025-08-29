@@ -517,22 +517,36 @@ HTML_TEMPLATE = """
             const formData = new FormData(e.target);
             const resultsDiv = document.getElementById('results');
             
+            // Debug: Log form data
+            console.log('Form submitted with file:', formData.get('file'));
+            
             resultsDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>🔍 Analyzing PCAP file...</p></div>';
             
             try {
+                console.log('Sending request to /analyze...');
                 const response = await fetch('/analyze', {
                     method: 'POST',
                     body: formData
                 });
                 
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const result = await response.json();
+                console.log('Analysis result:', result);
                 
                 if (result.success) {
                     displayResults(result);
                 } else {
+                    console.error('Analysis failed:', result.error);
                     resultsDiv.innerHTML = `<div class="error">❌ Error: ${result.error}</div>`;
                 }
             } catch (error) {
+                console.error('Upload error:', error);
                 resultsDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
             }
         });
@@ -875,7 +889,6 @@ ${data.risk_score > 70 ? '1. Immediate security incident response\\n2. Contact s
 
 --- End of Summary ---`;
         }
-        }
     </script>
 </body>
 </html>
@@ -905,14 +918,27 @@ def home():
 @app.route('/analyze', methods=['POST'])
 def analyze_pcap():
     try:
+        print(f"=== UPLOAD REQUEST RECEIVED ===")
+        print(f"Request method: {request.method}")
+        print(f"Request headers: {dict(request.headers)}")
+        print(f"Request files: {list(request.files.keys())}")
+        
         if 'file' not in request.files:
+            print("ERROR: No file in request.files")
             return jsonify({"success": False, "error": "No file uploaded"})
         
         file = request.files['file']
+        print(f"File received: {file.filename}")
+        print(f"File content type: {file.content_type}")
+        print(f"File size: {len(file.read()) if file else 'Unknown'}")
+        file.seek(0)  # Reset file pointer
+        
         if file.filename == '':
+            print("ERROR: Empty filename")
             return jsonify({"success": False, "error": "No file selected"})
         
         if not file.filename.lower().endswith(('.pcap', '.pcapng')):
+            print(f"ERROR: Invalid file type: {file.filename}")
             return jsonify({"success": False, "error": "Invalid file type. Please upload a .pcap or .pcapng file"})
         
         # Save file temporarily
@@ -921,11 +947,17 @@ def analyze_pcap():
         file.save(temp_file.name)
         temp_file.close()
         
+        print(f"File saved to: {temp_file.name}")
+        print(f"File size on disk: {os.path.getsize(temp_file.name)} bytes")
+        
         try:
             # Analyze the PCAP file
+            print("Starting PCAP analysis...")
             analysis_result = analyzer.analyze_pcap(temp_file.name)
+            print(f"Analysis completed: {analysis_result}")
             
             if 'error' in analysis_result:
+                print(f"Analysis error: {analysis_result['error']}")
                 return jsonify({"success": False, "error": analysis_result['error']})
             
             # Add additional information
@@ -937,16 +969,21 @@ def analyze_pcap():
             # Get recommendations
             analysis_result['recommendations'] = analyzer.get_recommendations(analysis_result)
             
+            print(f"Returning successful result: {analysis_result}")
             return jsonify(analysis_result)
             
         finally:
             # Clean up temporary file
             try:
                 os.unlink(temp_file.name)
-            except:
-                pass
+                print(f"Temporary file cleaned up: {temp_file.name}")
+            except Exception as cleanup_error:
+                print(f"Cleanup error: {cleanup_error}")
         
     except Exception as e:
+        print(f"EXCEPTION in analyze_pcap: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": f"Analysis failed: {str(e)}"})
 
 if __name__ == "__main__":
