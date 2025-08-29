@@ -27,33 +27,23 @@ class PcapAnalyzer:
         """Analyze PCAP file with real packet parsing and threat detection"""
         try:
             with open(file_path, 'rb') as f:
-                # Read PCAP header (24 bytes)
+                # Read and validate PCAP header (24 bytes)
                 header = f.read(24)
                 if len(header) < 24:
                     return {"error": "Invalid PCAP file - header too short"}
                 
-                # Check for all possible PCAP magic numbers
+                # Parse PCAP header
                 magic = struct.unpack('>I', header[0:4])[0]
-                magic_le = struct.unpack('<I', header[0:4])[0]
                 
-                # Valid PCAP magic numbers
-                valid_magics = [
-                    0xa1b2c3d4,  # Big-endian
-                    0xd4c3b2a1,  # Little-endian
-                    0xa1b23c4d,  # Big-endian with nanosecond precision
-                    0x4d3cb2a1   # Little-endian with nanosecond precision
-                ]
-                
-                if magic not in valid_magics and magic_le not in valid_magics:
-                    return {"error": f"Invalid PCAP file - unsupported magic number: 0x{magic:08x}"}
-                
-                # Determine byte order and precision
-                if magic in valid_magics:
-                    byte_order = '>'
-                    precision = 'microsecond' if magic in [0xa1b2c3d4, 0xd4c3b2a1] else 'nanosecond'
-                else:
+                # Check for valid PCAP magic numbers
+                if magic not in [0xa1b2c3d4, 0xa1b23c4d]:
+                    # Try little-endian
+                    magic = struct.unpack('<I', header[0:4])[0]
+                    if magic not in [0xd4c3b2a1, 0x4d3cb2a1]:
+                        return {"error": f"Invalid PCAP file - unsupported magic: 0x{magic:08x}"}
                     byte_order = '<'
-                    precision = 'microsecond' if magic_le in [0xa1b2c3d4, 0xd4c3b2a1] else 'nanosecond'
+                else:
+                    byte_order = '>'
                 
                 # Parse header with correct byte order
                 version_major = struct.unpack(f'{byte_order}H', header[4:6])[0]
@@ -83,19 +73,19 @@ class PcapAnalyzer:
                 total_bytes = 0
                 start_time = None
                 
+                print(f"Starting PCAP analysis of {file_path}")
+                print(f"File size: {os.path.getsize(file_path)} bytes")
+                
                 while True:
-                    # Read packet header
+                    # Read packet header (16 bytes)
                     pkt_header = f.read(16)
                     if len(pkt_header) < 16:
+                        print(f"End of file reached after {packet_count} packets")
                         break
                     
-                    # Parse packet header with correct byte order
+                    # Parse packet header
                     ts_sec = struct.unpack(f'{byte_order}I', pkt_header[0:4])[0]
-                    if precision == 'nanosecond':
-                        ts_usec = struct.unpack(f'{byte_order}I', pkt_header[4:8])[0]
-                    else:
-                        ts_usec = struct.unpack(f'{byte_order}I', pkt_header[4:8])[0]
-                    
+                    ts_usec = struct.unpack(f'{byte_order}I', pkt_header[4:8])[0]
                     incl_len = struct.unpack(f'{byte_order}I', pkt_header[8:12])[0]
                     orig_len = struct.unpack(f'{byte_order}I', pkt_header[12:16])[0]
                     
@@ -111,29 +101,36 @@ class PcapAnalyzer:
                     # Read packet data
                     packet_data = f.read(incl_len)
                     if len(packet_data) < incl_len:
+                        print(f"Failed to read packet {packet_count + 1}: expected {incl_len}, got {len(packet_data)}")
                         break
                     
                     packet_count += 1
                     total_bytes += incl_len
                     
+                    if packet_count % 100 == 0:
+                        print(f"Processed {packet_count} packets...")
+                    
                     # Enhanced packet analysis with real parsing
                     if len(packet_data) >= 14:
                         eth_type = struct.unpack(f'{byte_order}H', packet_data[12:14])[0]
+                        
                         if eth_type == 0x0800 and len(packet_data) >= 34:  # IPv4
                             protocols['IP'] += 1
                             
-                            # Extract IP addresses
+                            # Extract IP addresses (correct offset: 26-30 for src, 30-34 for dst)
                             src_ip = '.'.join(str(x) for x in packet_data[26:30])
                             dst_ip = '.'.join(str(x) for x in packet_data[30:34])
                             ips[src_ip] += 1
                             ips[dst_ip] += 1
                             
-                            # Check protocol
+                            # Check protocol (offset 23 for protocol field)
                             if len(packet_data) >= 35:
                                 ip_proto = packet_data[23]
+                                
                                 if ip_proto == 6:  # TCP
                                     protocols['TCP'] += 1
                                     if len(packet_data) >= 38:
+                                        # TCP ports are at offset 34-36 and 36-38
                                         src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
                                         dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
                                         ports[src_port] += 1
@@ -156,9 +153,11 @@ class PcapAnalyzer:
                                         }
                                         connections.append(connection)
                                         
-                                        # Analyze payload for threats
-                                        if len(packet_data) > 38:
-                                            payload = packet_data[38:]
+                                        # Analyze payload for threats (TCP header is 20 bytes, so payload starts at offset 54)
+                                        tcp_header_len = ((packet_data[46] >> 4) & 0xF) * 4  # Get TCP header length
+                                        payload_start = 34 + tcp_header_len  # IP header (20) + TCP header
+                                        if len(packet_data) > payload_start:
+                                            payload = packet_data[payload_start:]
                                             self._analyze_payload(payload, threats, suspicious_payloads, 
                                                                http_requests, file_transfers, scanning_activity,
                                                                connection, encrypted_traffic)
@@ -166,30 +165,39 @@ class PcapAnalyzer:
                                 elif ip_proto == 17:  # UDP
                                     protocols['UDP'] += 1
                                     if len(packet_data) >= 38:
+                                        # UDP ports are at offset 34-36 and 36-38
                                         src_port = struct.unpack(f'{byte_order}H', packet_data[34:36])[0]
                                         dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
                                         ports[src_port] += 1
                                         ports[dst_port] += 1
                                         
-                                        # Analyze DNS queries
+                                        # Analyze DNS queries (UDP header is 8 bytes, so payload starts at offset 42)
                                         if src_port == 53 or dst_port == 53:
-                                            self._analyze_dns_packet(packet_data[38:], dns_queries, connection)
+                                            if len(packet_data) >= 42:
+                                                dns_payload = packet_data[42:]
+                                                self._analyze_dns_packet(dns_payload, dns_queries, connection)
                                 
                                 elif ip_proto == 1:  # ICMP
                                     protocols['ICMP'] += 1
-                                    # Check for ping sweeps
-                                    if len(packet_data) >= 42:
+                                    # Check for ping sweeps (ICMP header starts at offset 34)
+                                    if len(packet_data) >= 38:
                                         icmp_type = packet_data[34]
                                         if icmp_type == 8:  # Echo request
                                             threats.append(f"ICMP ping detected from {src_ip}")
                         
                         elif eth_type == 0x0806:  # ARP
                             protocols['ARP'] += 1
-                            # Check for ARP spoofing
-                            if len(packet_data) >= 42:
+                            # Check for ARP spoofing (ARP header starts at offset 14)
+                            if len(packet_data) >= 22:
                                 arp_op = struct.unpack(f'{byte_order}H', packet_data[20:22])[0]
                                 if arp_op == 1:  # ARP request
                                     threats.append(f"ARP request from {src_ip}")
+                
+                print(f"Analysis complete: {packet_count} packets, {total_bytes} bytes")
+                print(f"Protocols found: {dict(protocols)}")
+                print(f"IPs found: {len(ips)} unique IPs")
+                print(f"Ports found: {len(ports)} unique ports")
+                print(f"Threats detected: {len(threats)}")
                 
                 # Calculate additional metrics
                 duration = max(timestamps) - min(timestamps) if timestamps else 0
@@ -237,7 +245,6 @@ class PcapAnalyzer:
                     'file_info': {
                         'version': f"{version_major}.{version_minor}",
                         'byte_order': 'Big-endian' if byte_order == '>' else 'Little-endian',
-                        'precision': precision,
                         'link_type': linktype,
                         'total_size': f"{packet_count} packets ({total_bytes:,} bytes)"
                     }
@@ -891,6 +898,16 @@ def home():
 @app.route('/health')
 def health():
     return jsonify({"status": "healthy"})
+
+@app.route('/test')
+def test():
+    """Test endpoint to verify backend functionality"""
+    return jsonify({
+        "status": "Backend is working!",
+        "timestamp": datetime.now().isoformat(),
+        "analyzer_loaded": analyzer is not None,
+        "threat_patterns": len(analyzer.threat_patterns['suspicious_ports']) if analyzer else 0
+    })
 
 @app.route('/analyze', methods=['POST'])
 def analyze_pcap():
