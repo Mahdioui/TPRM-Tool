@@ -932,6 +932,125 @@ def test():
         "threat_patterns": len(analyzer.threat_patterns['suspicious_ports']) if analyzer else 0
     })
 
+@app.route('/debug-pcap', methods=['POST'])
+def debug_pcap():
+    """Debug endpoint to see raw PCAP analysis data"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"})
+        
+        # Save file temporarily
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pcap')
+        file.save(temp_file.name)
+        temp_file.close()
+        
+        try:
+            # Get raw analysis result
+            analysis_result = analyzer.analyze_pcap(temp_file.name)
+            
+            # Return debug information
+            debug_info = {
+                "filename": file.filename,
+                "file_size": os.path.getsize(temp_file.name),
+                "analysis_result": analysis_result,
+                "success": 'error' not in analysis_result
+            }
+            
+            return jsonify(debug_info)
+            
+        finally:
+            # Clean up temporary file
+            try:
+                os.unlink(temp_file.name)
+            except:
+                pass
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route('/test-pcap-parsing')
+def test_pcap_parsing():
+    """Test endpoint to verify PCAP parsing logic with a simple test"""
+    try:
+        # Create a minimal test PCAP file in memory
+        test_pcap = bytearray()
+        
+        # PCAP header (24 bytes)
+        test_pcap.extend(struct.pack('>I', 0xa1b2c3d4))  # Magic number
+        test_pcap.extend(struct.pack('>H', 2))  # Version major
+        test_pcap.extend(struct.pack('>H', 4))  # Version minor
+        test_pcap.extend(struct.pack('>I', 0))  # Timezone
+        test_pcap.extend(struct.pack('>I', 0))  # Sigfigs
+        test_pcap.extend(struct.pack('>I', 65535))  # Snaplen
+        test_pcap.extend(struct.pack('>I', 1))  # Linktype (Ethernet)
+        
+        # Test packet header (16 bytes)
+        test_pcap.extend(struct.pack('>I', 1234567890))  # Timestamp
+        test_pcap.extend(struct.pack('>I', 0))  # Microseconds
+        test_pcap.extend(struct.pack('>I', 60))  # Included length
+        test_pcap.extend(struct.pack('>I', 60))  # Original length
+        
+        # Test packet data (60 bytes - minimal Ethernet + IP + TCP)
+        # Ethernet header (14 bytes)
+        test_pcap.extend(b'\x00\x11\x22\x33\x44\x55')  # Destination MAC
+        test_pcap.extend(b'\xaa\xbb\xcc\xdd\xee\xff')  # Source MAC
+        test_pcap.extend(struct.pack('>H', 0x0800))  # EtherType (IPv4)
+        
+        # IP header (20 bytes)
+        test_pcap.extend(b'\x45')  # Version + IHL
+        test_pcap.extend(b'\x00')  # Type of Service
+        test_pcap.extend(struct.pack('>H', 40))  # Total Length
+        test_pcap.extend(b'\x00\x00')  # Identification
+        test_pcap.extend(b'\x00\x00')  # Flags + Fragment Offset
+        test_pcap.extend(b'\x40')  # TTL
+        test_pcap.extend(b'\x06')  # Protocol (TCP)
+        test_pcap.extend(b'\x00\x00')  # Checksum
+        test_pcap.extend(b'\xc0\xa8\x01\x01')  # Source IP (192.168.1.1)
+        test_pcap.extend(b'\xc0\xa8\x01\x02')  # Destination IP (192.168.1.2)
+        
+        # TCP header (20 bytes)
+        test_pcap.extend(struct.pack('>H', 12345))  # Source port
+        test_pcap.extend(struct.pack('>H', 80))  # Destination port
+        test_pcap.extend(b'\x00\x00\x00\x00')  # Sequence number
+        test_pcap.extend(b'\x00\x00\x00\x00')  # Acknowledgement number
+        test_pcap.extend(b'\x50')  # Data offset
+        test_pcap.extend(b'\x00')  # Flags
+        test_pcap.extend(b'\x00\x00')  # Window size
+        test_pcap.extend(b'\x00\x00')  # Checksum
+        test_pcap.extend(b'\x00\x00')  # Urgent pointer
+        
+        # Save test file temporarily
+        test_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pcap')
+        test_file.write(test_pcap)
+        test_file.close()
+        
+        try:
+            # Test the analyzer
+            result = analyzer.analyze_pcap(test_file.name)
+            
+            test_info = {
+                "test_pcap_created": True,
+                "test_file_size": len(test_pcap),
+                "test_analysis_result": result,
+                "test_success": 'error' not in result
+            }
+            
+            return jsonify(test_info)
+            
+        finally:
+            # Clean up test file
+            try:
+                os.unlink(test_file.name)
+            except:
+                pass
+        
+    except Exception as e:
+        return jsonify({"error": f"Test failed: {str(e)}"})
+
 @app.route('/analyze', methods=['POST'])
 def analyze_pcap():
     try:
