@@ -1215,6 +1215,14 @@ def analyze_pcap():
 
 # Vercel serverless function handler
 app.debug = False
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+
+# Ensure proper content type for HTML responses
+@app.after_request
+def add_header(response):
+    if response.mimetype == 'text/html':
+        response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return response
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
