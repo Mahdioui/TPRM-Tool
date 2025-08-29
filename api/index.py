@@ -36,14 +36,14 @@ class PcapAnalyzer:
                 magic = struct.unpack('>I', header[0:4])[0]
                 
                 # Check for valid PCAP magic numbers
-                if magic not in [0xa1b2c3d4, 0xa1b23c4d]:
-                    # Try little-endian
-                    magic = struct.unpack('<I', header[0:4])[0]
-                    if magic not in [0xd4c3b2a1, 0x4d3cb2a1]:
-                        return {"error": f"Invalid PCAP file - unsupported magic: 0x{magic:08x}"}
-                    byte_order = '<'
-                else:
+                if magic in [0xa1b2c3d4, 0xa1b23c4d]:  # Big-endian formats
                     byte_order = '>'
+                    precision = 'microsecond' if magic == 0xa1b2c3d4 else 'nanosecond'
+                elif magic in [0xd4c3b2a1, 0x4d3cb2a1]:  # Little-endian formats
+                    byte_order = '<'
+                    precision = 'microsecond' if magic == 0xd4c3b2a1 else 'nanosecond'
+                else:
+                    return {"error": f"Invalid PCAP file - unsupported magic: 0x{magic:08x}"}
                 
                 # Parse header with correct byte order
                 version_major = struct.unpack(f'{byte_order}H', header[4:6])[0]
