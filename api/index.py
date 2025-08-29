@@ -7,6 +7,7 @@ import json
 from collections import defaultdict
 import io
 import re
+from nlp_utils import nlp_analyzer
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -23,7 +24,7 @@ class PcapAnalyzer:
         }
     
     def analyze_pcap(self, file_path):
-        """Simple but working PCAP analysis"""
+        """Enhanced PCAP analysis with NLP threat detection"""
         try:
             with open(file_path, 'rb') as f:
                 # Read PCAP header
@@ -43,7 +44,7 @@ class PcapAnalyzer:
                 version_major = struct.unpack(f'{byte_order}H', header[4:6])[0]
                 version_minor = struct.unpack(f'{byte_order}H', header[6:8])[0]
                 
-                # Initialize counters
+                # Initialize enhanced analysis
                 protocols = defaultdict(int)
                 ips = defaultdict(int)
                 ports = defaultdict(int)
@@ -51,6 +52,11 @@ class PcapAnalyzer:
                 connections = []
                 packet_count = 0
                 total_bytes = 0
+                
+                # NLP analysis results
+                nlp_threats = []
+                suspicious_payloads = []
+                encrypted_traffic = 0
                 
                 # Read packets
                 while True:
@@ -74,7 +80,7 @@ class PcapAnalyzer:
                     packet_count += 1
                     total_bytes += incl_len
                     
-                    # Basic packet analysis
+                    # Enhanced packet analysis with NLP
                     if len(packet_data) >= 14:
                         eth_type = struct.unpack(f'{byte_order}H', packet_data[12:14])[0]
                         
@@ -105,13 +111,23 @@ class PcapAnalyzer:
                                             threats.append(f"Suspicious port: {src_port}->{dst_port}")
                                         
                                         # Track connections
-                                        connections.append({
+                                        connection = {
                                             'src_ip': src_ip,
                                             'dst_ip': dst_ip,
                                             'src_port': src_port,
                                             'dst_port': dst_port,
                                             'protocol': 'TCP'
-                                        })
+                                        }
+                                        connections.append(connection)
+                                        
+                                        # NLP analysis of payload
+                                        if len(packet_data) > 54:  # TCP header is 20 bytes
+                                            tcp_header_len = ((packet_data[46] >> 4) & 0xF) * 4
+                                            payload_start = 34 + tcp_header_len
+                                            if len(packet_data) > payload_start:
+                                                payload = packet_data[payload_start:]
+                                                self._analyze_payload_nlp(payload, threats, suspicious_payloads, 
+                                                                        nlp_threats, encrypted_traffic, connection)
                                 
                                 elif ip_proto == 17:  # UDP
                                     protocols['UDP'] += 1
@@ -120,6 +136,12 @@ class PcapAnalyzer:
                                         dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
                                         ports[src_port] += 1
                                         ports[dst_port] += 1
+                                        
+                                        # NLP analysis of DNS payloads
+                                        if src_port == 53 or dst_port == 53:
+                                            if len(packet_data) >= 42:
+                                                dns_payload = packet_data[42:]
+                                                self._analyze_dns_nlp(dns_payload, nlp_threats, connection)
                                 
                                 elif ip_proto == 1:  # ICMP
                                     protocols['ICMP'] += 1
@@ -132,8 +154,10 @@ class PcapAnalyzer:
                 avg_packet_size = total_bytes / packet_count if packet_count > 0 else 0
                 packets_per_second = packet_count / duration if duration > 0 else 0
                 
-                # Calculate risk score
-                risk_score = self._calculate_risk_score(packet_count, protocols, threats, ports, ips)
+                # Enhanced risk score with NLP
+                risk_score = self._calculate_enhanced_risk_score(packet_count, protocols, threats, 
+                                                               ports, ips, nlp_threats, suspicious_payloads, 
+                                                               encrypted_traffic)
                 
                 # Get top talkers and ports
                 top_ips = dict(sorted(ips.items(), key=lambda x: x[1], reverse=True)[:10])
@@ -141,6 +165,9 @@ class PcapAnalyzer:
                 
                 # Connection analysis
                 connection_analysis = self._analyze_connections(connections, ips)
+                
+                # Combine all threats
+                all_threats = threats + nlp_threats
                 
                 return {
                     'packet_count': packet_count,
@@ -151,12 +178,21 @@ class PcapAnalyzer:
                     'protocols': dict(protocols),
                     'ips': dict(ips),
                     'ports': dict(ports),
-                    'threats': threats,
+                    'threats': all_threats,
+                    'threat_categories': {
+                        'regex_threats': threats,
+                        'nlp_threats': nlp_threats,
+                        'suspicious_payloads': suspicious_payloads
+                    },
                     'connections': connections[:100],
                     'risk_score': risk_score,
                     'top_ips': top_ips,
                     'top_ports': top_ports,
                     'connection_analysis': connection_analysis,
+                    'nlp_analysis': {
+                        'encrypted_traffic': encrypted_traffic,
+                        'suspicious_payloads_count': len(suspicious_payloads)
+                    },
                     'file_info': {
                         'version': f"{version_major}.{version_minor}",
                         'total_size': f"{packet_count} packets ({total_bytes:,} bytes)"
@@ -165,6 +201,63 @@ class PcapAnalyzer:
                 
         except Exception as e:
             return {"error": f"Analysis failed: {str(e)}"}
+    
+    def _analyze_payload_nlp(self, payload, threats, suspicious_payloads, nlp_threats, encrypted_traffic, connection):
+        """Analyze payload using NLP and regex patterns"""
+        try:
+            # Regex pattern matching
+            for pattern in self.threat_patterns['malware_patterns']:
+                if re.search(pattern, payload.decode('utf-8', errors='ignore'), re.IGNORECASE):
+                    threats.append(f"Malware pattern: {pattern}")
+                    suspicious_payloads.append({
+                        'pattern': pattern,
+                        'connection': connection,
+                        'payload_preview': payload[:200].hex()
+                    })
+            
+            # NLP analysis
+            nlp_result = nlp_analyzer.analyze_payload(payload)
+            
+            if nlp_result.get('text_analysis', {}).get('threat_score', 0) > 30:
+                nlp_threats.append(f"NLP threat detected: {nlp_result['text_analysis']['threat_level']} level")
+                suspicious_payloads.append({
+                    'nlp_analysis': nlp_result,
+                    'connection': connection,
+                    'payload_preview': payload[:200].hex()
+                })
+            
+            # Check for encrypted traffic
+            if nlp_result.get('binary_analysis', {}).get('is_encrypted', False):
+                encrypted_traffic += 1
+                
+        except Exception:
+            # Continue analysis even if payload parsing fails
+            pass
+    
+    def _analyze_dns_nlp(self, dns_payload, nlp_threats, connection):
+        """Analyze DNS payload using NLP"""
+        try:
+            # Simple DNS query extraction
+            if len(dns_payload) > 12:
+                query_start = 12
+                query_name = ""
+                pos = query_start
+                
+                while pos < len(dns_payload) and dns_payload[pos] != 0:
+                    length = dns_payload[pos]
+                    pos += 1
+                    if pos + length <= len(dns_payload):
+                        query_name += dns_payload[pos:pos+length].decode('utf-8', errors='ignore') + "."
+                        pos += length
+                
+                if query_name:
+                    # NLP analysis of domain name
+                    nlp_result = nlp_analyzer.analyze_text(query_name)
+                    if nlp_result.get('threat_score', 0) > 20:
+                        nlp_threats.append(f"Suspicious DNS query: {query_name}")
+                        
+        except Exception:
+            pass
     
     def _analyze_connections(self, connections, ips):
         """Analyze connection patterns"""
@@ -180,8 +273,8 @@ class PcapAnalyzer:
             'total_connections': len(connections)
         }
     
-    def _calculate_risk_score(self, packet_count, protocols, threats, ports, ips):
-        """Calculate risk score from 0-100"""
+    def _calculate_enhanced_risk_score(self, packet_count, protocols, threats, ports, ips, nlp_threats, suspicious_payloads, encrypted_traffic):
+        """Calculate enhanced risk score with NLP analysis"""
         score = 0
         
         # Base score from packet count
@@ -194,6 +287,18 @@ class PcapAnalyzer:
         
         # Threat score
         score += len(threats) * 15
+        
+        # NLP threat score
+        score += len(nlp_threats) * 20
+        
+        # Suspicious payload score
+        score += len(suspicious_payloads) * 25
+        
+        # Encrypted traffic score
+        if encrypted_traffic > 100:
+            score += 15
+        elif encrypted_traffic > 50:
+            score += 10
         
         # Protocol risk
         if 'HTTP' in protocols:
@@ -217,7 +322,7 @@ class PcapAnalyzer:
         return min(score, 100)
     
     def get_recommendations(self, analysis):
-        """Get security recommendations"""
+        """Get enhanced security recommendations"""
         recommendations = []
         
         if analysis['risk_score'] > 70:
@@ -242,6 +347,21 @@ class PcapAnalyzer:
             recommendations.extend([
                 "🟢 LOW: Standard security practices sufficient",
                 "✅ Continue regular security monitoring"
+            ])
+        
+        # NLP-specific recommendations
+        if analysis.get('threat_categories', {}).get('nlp_threats'):
+            recommendations.extend([
+                "🧠 NLP analysis detected suspicious content",
+                "🔍 Review payload analysis for hidden threats",
+                "📝 Monitor for unusual text patterns in traffic"
+            ])
+        
+        if analysis.get('nlp_analysis', {}).get('encrypted_traffic', 0) > 50:
+            recommendations.extend([
+                "🔐 High volume of encrypted traffic detected",
+                "🔍 Investigate potential data exfiltration",
+                "📊 Monitor encrypted traffic patterns"
             ])
         
         if analysis['threats']:
@@ -383,6 +503,56 @@ HTML_TEMPLATE = """
                     <h3>🔌 Top Ports</h3>
                     <p>${Object.entries(result.top_ports).map(([port, count]) => `Port ${port}: ${count.toLocaleString()} packets`).join(', ')}</p>
                 </div>
+                
+                ${result.threat_categories ? `
+                <div class="section">
+                    <h3>🔍 Threat Analysis</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div style="background: #fff5f5; padding: 15px; border-radius: 8px; border-left: 4px solid #e74c3c;">
+                            <h4>🚨 Regex Threats</h4>
+                            <p><strong>Count:</strong> ${result.threat_categories.regex_threats ? result.threat_categories.regex_threats.length : 0}</p>
+                            ${result.threat_categories.regex_threats && result.threat_categories.regex_threats.length > 0 ? 
+                                `<ul style="margin: 10px 0; padding-left: 20px;">${result.threat_categories.regex_threats.map(threat => `<li>${threat}</li>`).join('')}</ul>` : 
+                                '<p style="color: #27ae60;">✅ No regex threats detected</p>'
+                            }
+                        </div>
+                        
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; border-left: 4px solid #3498db;">
+                            <h4>🧠 NLP Threats</h4>
+                            <p><strong>Count:</strong> ${result.threat_categories.nlp_threats ? result.threat_categories.nlp_threats.length : 0}</p>
+                            ${result.threat_categories.nlp_threats && result.threat_categories.nlp_threats.length > 0 ? 
+                                `<ul style="margin: 10px 0; padding-left: 20px;">${result.threat_categories.nlp_threats.map(threat => `<li>${threat}</li>`).join('')}</ul>` : 
+                                '<p style="color: #27ae60;">✅ No NLP threats detected</p>'
+                            }
+                        </div>
+                        
+                        <div style="background: #fff9f0; padding: 15px; border-radius: 8px; border-left: 4px solid #f39c12;">
+                            <h4>🔐 Suspicious Payloads</h4>
+                            <p><strong>Count:</strong> ${result.threat_categories.suspicious_payloads ? result.threat_categories.suspicious_payloads.length : 0}</p>
+                            ${result.threat_categories.suspicious_payloads && result.threat_categories.suspicious_payloads.length > 0 ? 
+                                '<p style="color: #e74c3c;">⚠️ Suspicious content detected in payloads</p>' : 
+                                '<p style="color: #27ae60;">✅ No suspicious payloads detected</p>'
+                            }
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                ${result.nlp_analysis ? `
+                <div class="section">
+                    <h3>🧠 NLP Analysis Results</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5em; font-weight: bold; color: #3498db;">${result.nlp_analysis.encrypted_traffic || 0}</div>
+                            <div>Encrypted Traffic Packets</div>
+                        </div>
+                        <div style="background: #fff9f0; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5em; font-weight: bold; color: #f39c12;">${result.nlp_analysis.suspicious_payloads_count || 0}</div>
+                            <div>Suspicious Payloads</div>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
             `;
             
             if (result.threats && result.threats.length > 0) {
