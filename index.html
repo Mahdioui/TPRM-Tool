@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCAP Security Analyzer - Professional Network Analysis</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            padding: 40px 0;
+        }
+        
+        .header h1 {
+            font-size: 3em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            margin: 10px 0;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin: 20px 0;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin: 40px 0;
+        }
+        
+        .feature-card {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            border-color: #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        
+        .feature-icon {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        
+        .feature-title {
+            font-size: 1.5em;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        
+        .feature-description {
+            color: #7f8c8d;
+            line-height: 1.6;
+        }
+        
+        .cta-section {
+            text-align: center;
+            margin: 40px 0;
+        }
+        
+        .cta-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.2em;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        
+        .tech-stack {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
+        }
+        
+        .tech-stack h3 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        
+        .tech-list {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .tech-item {
+            background: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 1px solid #e9ecef;
+            color: #495057;
+            font-weight: 500;
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            padding: 20px 0;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔒 PCAP Security Analyzer</h1>
+            <p>Professional Network Traffic Analysis & Advanced Threat Detection</p>
+        </div>
+        
+        <div class="main-content">
+            <h2 style="text-align: center; color: #2c3e50; margin-bottom: 30px;">
+                Advanced Network Security Analysis Platform
+            </h2>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-title">Comprehensive PCAP Analysis</div>
+                    <div class="feature-description">
+                        Deep packet inspection with protocol identification, IP analysis, and connection tracking. 
+                        Supports all major PCAP formats with accurate packet parsing.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔍</div>
+                    <div class="feature-title">Regex Pattern Detection</div>
+                    <div class="feature-description">
+                        Advanced regex-based threat detection for malware indicators, suspicious commands, 
+                        and known attack patterns in network traffic.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🧠</div>
+                    <div class="feature-title">NLP Threat Analysis</div>
+                    <div class="feature-description">
+                        Natural Language Processing for intelligent content analysis, entity extraction, 
+                        and behavioral threat detection in payloads.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🚨</div>
+                    <div class="feature-title">Real-time Threat Detection</div>
+                    <div class="feature-description">
+                        Instant identification of suspicious activities, port scanning, data exfiltration, 
+                        and encrypted traffic analysis.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📈</div>
+                    <div class="feature-title">Risk Scoring & Analytics</div>
+                    <div class="feature-description">
+                        Intelligent risk assessment with detailed metrics, connection analysis, 
+                        and actionable security recommendations.
+                    </div>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <div class="feature-title">Professional Reporting</div>
+                    <div class="feature-description">
+                        Comprehensive security reports with threat categorization, 
+                        detailed analysis, and remediation guidance.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tech-stack">
+                <h3>🛠️ Technology Stack</h3>
+                <div class="tech-list">
+                    <div class="tech-item">Python Flask</div>
+                    <div class="tech-item">PCAP Parsing</div>
+                    <div class="tech-item">Regex Engine</div>
+                    <div class="tech-item">NLP Analysis</div>
+                    <div class="tech-item">Binary Analysis</div>
+                    <div class="tech-item">Network Protocols</div>
+                    <div class="tech-item">Security Patterns</div>
+                    <div class="tech-item">Risk Assessment</div>
+                </div>
+            </div>
+            
+            <div class="cta-section">
+                <a href="https://tprm-tool-fod8exayf-salmamahdioui8-gmailcoms-projects.vercel.app" class="cta-button">
+                    🚀 Launch PCAP Analyzer
+                </a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Professional Network Security Analysis Platform | Built with Advanced Threat Detection</p>
+        </div>
+    </div>
+</body>
+</html>
