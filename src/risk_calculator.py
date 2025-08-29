@@ -652,14 +652,12 @@ class RiskCalculator:
         """
         risk_factors = []
         
-        # Calculate individual risk factors
         risk_factors.append(self.calculate_protocol_risk(flows))
         risk_factors.append(self.calculate_connection_anomaly_risk(connections))
         risk_factors.append(self.calculate_payload_threat_risk(threat_matches, nlp_analyses))
         risk_factors.append(self.calculate_port_usage_risk(flows))
         risk_factors.append(self.calculate_data_exposure_risk(threat_matches))
         
-        # Calculate weighted overall score
         total_weighted_score = 0.0
         total_weight = 0.0
         

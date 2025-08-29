@@ -7,7 +7,21 @@ import json
 from collections import defaultdict
 import io
 import re
-from nlp_utils import nlp_analyzer
+
+# Try to import nlp_utils, provide fallback if not available
+try:
+    from nlp_utils import nlp_analyzer
+    NLP_AVAILABLE = True
+except ImportError:
+    NLP_AVAILABLE = False
+    # Create a simple fallback analyzer
+    class FallbackNLPAnalyzer:
+        def analyze_payload(self, payload):
+            return {'text_analysis': {'threat_score': 0, 'threat_level': 'MINIMAL'}, 'binary_analysis': {'is_encrypted': False}}
+        def analyze_text(self, text):
+            return {'threat_score': 0, 'threat_level': 'MINIMAL'}
+    
+    nlp_analyzer = FallbackNLPAnalyzer()
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -586,13 +600,26 @@ HTML_TEMPLATE = """
 </html>
 """
 
-@app.route('/')
-def home():
-    return HTML_TEMPLATE
+@app.route('/test')
+def test():
+    """Simple test endpoint to verify backend is working"""
+    return jsonify({
+        "message": "PCAP Analyzer Backend is working!",
+        "nlp_available": NLP_AVAILABLE,
+        "timestamp": time.time()
+    })
 
 @app.route('/health')
 def health():
-    return jsonify({"status": "healthy"})
+    return jsonify({
+        "status": "healthy",
+        "nlp_available": NLP_AVAILABLE,
+        "timestamp": time.time()
+    })
+
+@app.route('/')
+def home():
+    return HTML_TEMPLATE
 
 @app.route('/analyze', methods=['POST'])
 def analyze_pcap():
@@ -624,6 +651,7 @@ def analyze_pcap():
             analysis_result['success'] = True
             analysis_result['filename'] = file.filename
             analysis_result['analysis_time'] = f"{time.time() - start_time:.2f} seconds"
+            analysis_result['nlp_available'] = NLP_AVAILABLE
             
             # Get recommendations
             analysis_result['recommendations'] = analyzer.get_recommendations(analysis_result)
@@ -638,7 +666,7 @@ def analyze_pcap():
                 pass
         
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"success": False, "error": f"Analysis failed: {str(e)}"})
 
 if __name__ == "__main__":
     app.run()
