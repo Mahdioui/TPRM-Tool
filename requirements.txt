@@ -1,3 +1,24 @@
+# Core Flask framework
 Flask==2.3.3
 Werkzeug==2.3.7
+
+# PDF generation
 reportlab==4.0.4
+
+# Additional security and analysis libraries
+cryptography==41.0.7
+pycryptodome==3.19.0
+
+# Data processing
+numpy==1.24.3
+pandas==2.0.3
+
+# Network analysis
+scapy==2.5.0
+pypcap==1.2.3
+
+# Development and testing (optional)
+pytest==7.4.2
+pytest-cov==4.1.0
+black==23.9.1
+flake8==6.1.0
