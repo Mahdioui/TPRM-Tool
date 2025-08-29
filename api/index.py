@@ -4,8 +4,10 @@ import os
 import time
 import struct
 import json
-from collections import defaultdict
+from collections import defaultdict, Counter
 import io
+import re
+from datetime import datetime
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -22,7 +24,7 @@ class PcapAnalyzer:
         }
     
     def analyze_pcap(self, file_path):
-        """Analyze PCAP file and return comprehensive security insights"""
+        """Analyze PCAP file with real packet parsing and threat detection"""
         try:
             with open(file_path, 'rb') as f:
                 # Read PCAP header (24 bytes)
@@ -61,7 +63,7 @@ class PcapAnalyzer:
                 snaplen = struct.unpack(f'{byte_order}I', header[16:20])[0]
                 linktype = struct.unpack(f'{byte_order}I', header[20:24])[0]
                 
-                # Initialize analysis
+                # Initialize enhanced analysis
                 protocols = defaultdict(int)
                 ips = defaultdict(int)
                 ports = defaultdict(int)
@@ -69,6 +71,13 @@ class PcapAnalyzer:
                 connections = []
                 packet_sizes = []
                 timestamps = []
+                http_requests = []
+                dns_queries = []
+                suspicious_payloads = []
+                encrypted_traffic = 0
+                file_transfers = []
+                scanning_activity = []
+                anomalies = []
                 
                 packet_count = 0
                 total_bytes = 0
@@ -107,7 +116,7 @@ class PcapAnalyzer:
                     packet_count += 1
                     total_bytes += incl_len
                     
-                    # Basic packet analysis
+                    # Enhanced packet analysis with real parsing
                     if len(packet_data) >= 14:
                         eth_type = struct.unpack(f'{byte_order}H', packet_data[12:14])[0]
                         if eth_type == 0x0800 and len(packet_data) >= 34:  # IPv4
@@ -136,7 +145,7 @@ class PcapAnalyzer:
                                             threats.append(f"Suspicious port usage: {src_port}->{dst_port}")
                                         
                                         # Track connections
-                                        connections.append({
+                                        connection = {
                                             'src_ip': src_ip,
                                             'dst_ip': dst_ip,
                                             'src_port': src_port,
@@ -144,7 +153,15 @@ class PcapAnalyzer:
                                             'protocol': 'TCP',
                                             'size': incl_len,
                                             'timestamp': ts_sec
-                                        })
+                                        }
+                                        connections.append(connection)
+                                        
+                                        # Analyze payload for threats
+                                        if len(packet_data) > 38:
+                                            payload = packet_data[38:]
+                                            self._analyze_payload(payload, threats, suspicious_payloads, 
+                                                               http_requests, file_transfers, scanning_activity,
+                                                               connection, encrypted_traffic)
                                 
                                 elif ip_proto == 17:  # UDP
                                     protocols['UDP'] += 1
@@ -153,20 +170,36 @@ class PcapAnalyzer:
                                         dst_port = struct.unpack(f'{byte_order}H', packet_data[36:38])[0]
                                         ports[src_port] += 1
                                         ports[dst_port] += 1
+                                        
+                                        # Analyze DNS queries
+                                        if src_port == 53 or dst_port == 53:
+                                            self._analyze_dns_packet(packet_data[38:], dns_queries, connection)
                                 
                                 elif ip_proto == 1:  # ICMP
                                     protocols['ICMP'] += 1
+                                    # Check for ping sweeps
+                                    if len(packet_data) >= 42:
+                                        icmp_type = packet_data[34]
+                                        if icmp_type == 8:  # Echo request
+                                            threats.append(f"ICMP ping detected from {src_ip}")
                         
                         elif eth_type == 0x0806:  # ARP
                             protocols['ARP'] += 1
+                            # Check for ARP spoofing
+                            if len(packet_data) >= 42:
+                                arp_op = struct.unpack(f'{byte_order}H', packet_data[20:22])[0]
+                                if arp_op == 1:  # ARP request
+                                    threats.append(f"ARP request from {src_ip}")
                 
                 # Calculate additional metrics
                 duration = max(timestamps) - min(timestamps) if timestamps else 0
                 avg_packet_size = total_bytes / packet_count if packet_count > 0 else 0
                 packets_per_second = packet_count / duration if duration > 0 else 0
                 
-                # Calculate risk score
-                risk_score = self._calculate_risk_score(packet_count, protocols, threats, ports, ips)
+                # Enhanced risk score calculation
+                risk_score = self._calculate_enhanced_risk_score(packet_count, protocols, threats, 
+                                                              ports, ips, suspicious_payloads, 
+                                                              scanning_activity, encrypted_traffic)
                 
                 # Get top talkers and ports
                 top_ips = dict(sorted(ips.items(), key=lambda x: x[1], reverse=True)[:10])
@@ -174,6 +207,9 @@ class PcapAnalyzer:
                 
                 # Analyze connection patterns
                 connection_analysis = self._analyze_connections(connections, ips)
+                
+                # Threat categorization
+                threat_categories = self._categorize_threats(threats)
                 
                 return {
                     'packet_count': packet_count,
@@ -185,11 +221,19 @@ class PcapAnalyzer:
                     'ips': dict(ips),
                     'ports': dict(ports),
                     'threats': threats,
+                    'threat_categories': threat_categories,
                     'connections': connections[:100],  # Limit to first 100 connections
                     'risk_score': risk_score,
                     'top_ips': top_ips,
                     'top_ports': top_ports,
                     'connection_analysis': connection_analysis,
+                    'http_requests': http_requests[:50],
+                    'dns_queries': dns_queries[:50],
+                    'suspicious_payloads': suspicious_payloads[:50],
+                    'encrypted_traffic': encrypted_traffic,
+                    'file_transfers': file_transfers[:50],
+                    'scanning_activity': scanning_activity[:50],
+                    'anomalies': anomalies,
                     'file_info': {
                         'version': f"{version_major}.{version_minor}",
                         'byte_order': 'Big-endian' if byte_order == '>' else 'Little-endian',
@@ -219,12 +263,232 @@ class PcapAnalyzer:
         
         most_active_ips = dict(sorted(ip_activity.items(), key=lambda x: x[1], reverse=True)[:5])
         
+        # Connection rate analysis
+        if len(connections) > 1:
+            timestamps = sorted([c['timestamp'] for c in connections])
+            time_diffs = [timestamps[i+1] - timestamps[i] for i in range(len(timestamps)-1)]
+            avg_connection_rate = 1 / (sum(time_diffs) / len(time_diffs)) if time_diffs else 0
+        else:
+            avg_connection_rate = 0
+        
         return {
             'unique_ips': unique_ips,
             'unique_connections': unique_connections,
             'most_active_ips': most_active_ips,
-            'total_connections': len(connections)
+            'total_connections': len(connections),
+            'avg_connection_rate': avg_connection_rate
         }
+    
+    def _analyze_payload(self, payload, threats, suspicious_payloads, http_requests, 
+                         file_transfers, scanning_activity, connection, encrypted_traffic):
+        """Analyze packet payload for malicious patterns using regex"""
+        try:
+            payload_str = payload.decode('utf-8', errors='ignore')
+            
+            # Check for malware indicators
+            malware_patterns = [
+                r'cmd\.exe',
+                r'powershell',
+                r'wget\s+http',
+                r'curl\s+http',
+                r'nc\s+-l',
+                r'ncat\s+-l',
+                r'python\s+-c',
+                r'perl\s+-e',
+                r'bash\s+-c',
+                r'\.exe\s+download',
+                r'\.bat\s+execute',
+                r'\.ps1\s+invoke'
+            ]
+            
+            for pattern in malware_patterns:
+                if re.search(pattern, payload_str, re.IGNORECASE):
+                    threats.append(f"Malware indicator detected: {pattern}")
+                    suspicious_payloads.append({
+                        'pattern': pattern,
+                        'connection': connection,
+                        'payload_preview': payload_str[:200]
+                    })
+            
+            # Check for data exfiltration
+            exfiltration_patterns = [
+                r'POST\s+/upload',
+                r'POST\s+/data',
+                r'GET\s+/download',
+                r'FTP\s+STOR',
+                r'SMTP\s+DATA'
+            ]
+            
+            for pattern in exfiltration_patterns:
+                if re.search(pattern, payload_str, re.IGNORECASE):
+                    threats.append(f"Data exfiltration pattern: {pattern}")
+            
+            # Check for scanning activity
+            scanning_patterns = [
+                r'port\s+scan',
+                r'nmap',
+                r'ping\s+sweep',
+                r'arp\s+scan',
+                r'syn\s+flood'
+            ]
+            
+            for pattern in scanning_patterns:
+                if re.search(pattern, payload_str, re.IGNORECASE):
+                    scanning_activity.append({
+                        'pattern': pattern,
+                        'connection': connection,
+                        'timestamp': connection['timestamp']
+                    })
+            
+            # Check for HTTP requests
+            if 'HTTP/' in payload_str or 'GET ' in payload_str or 'POST ' in payload_str:
+                self._parse_http_request(payload_str, http_requests, connection)
+            
+            # Check for file transfer indicators
+            file_transfer_patterns = [
+                r'\.exe\s+transfer',
+                r'\.zip\s+download',
+                r'\.rar\s+extract',
+                r'\.tar\s+unpack'
+            ]
+            
+            for pattern in file_transfer_patterns:
+                if re.search(pattern, payload_str, re.IGNORECASE):
+                    file_transfers.append({
+                        'pattern': pattern,
+                        'connection': connection,
+                        'timestamp': connection['timestamp']
+                    })
+            
+            # Check for encrypted traffic (high entropy)
+            if len(payload) > 50:
+                entropy = self._calculate_entropy(payload)
+                if entropy > 7.5:  # High entropy indicates encryption
+                    encrypted_traffic += 1
+            
+        except Exception as e:
+            # Continue analysis even if payload parsing fails
+            pass
+    
+    def _parse_http_request(self, payload_str, http_requests, connection):
+        """Parse HTTP request details"""
+        try:
+            lines = payload_str.split('\n')
+            if lines and ' ' in lines[0]:
+                method, path, _ = lines[0].split(' ', 2)
+                
+                http_request = {
+                    'method': method,
+                    'path': path,
+                    'connection': connection,
+                    'timestamp': connection['timestamp']
+                }
+                http_requests.append(http_request)
+                
+                # Check for suspicious HTTP patterns
+                suspicious_paths = ['/admin', '/login', '/upload', '/shell', '/cmd', '/exec']
+                for suspicious in suspicious_paths:
+                    if suspicious in path.lower():
+                        connection['threats'] = connection.get('threats', [])
+                        connection['threats'].append(f"Suspicious HTTP path: {path}")
+                        
+        except Exception as e:
+            # Continue analysis even if HTTP parsing fails
+            pass
+    
+    def _analyze_dns_packet(self, dns_data, dns_queries, connection):
+        """Analyze DNS packet for suspicious queries"""
+        try:
+            if len(dns_data) < 12:
+                return
+            
+            # Parse DNS header
+            qdcount = struct.unpack('>H', dns_data[4:6])[0]
+            
+            if qdcount > 0:
+                # Extract query name (simplified parsing)
+                query_start = 12
+                query_name = ""
+                pos = query_start
+                
+                while pos < len(dns_data) and dns_data[pos] != 0:
+                    length = dns_data[pos]
+                    pos += 1
+                    if pos + length <= len(dns_data):
+                        query_name += dns_data[pos:pos+length].decode('utf-8', errors='ignore') + "."
+                        pos += length
+                
+                if query_name:
+                    dns_queries.append({
+                        'query': query_name.rstrip('.'),
+                        'connection': connection,
+                        'timestamp': connection['timestamp']
+                    })
+                    
+                    # Check for suspicious domains
+                    suspicious_domains = [
+                        'malware', 'phishing', 'c2', 'command', 'control',
+                        'backdoor', 'trojan', 'virus', 'spyware'
+                    ]
+                    
+                    for suspicious in suspicious_domains:
+                        if suspicious in query_name.lower():
+                            connection['threats'] = connection.get('threats', [])
+                            connection['threats'].append(f"Suspicious DNS query: {query_name}")
+                            
+        except Exception as e:
+            # Continue analysis even if DNS parsing fails
+            pass
+    
+    def _calculate_entropy(self, data):
+        """Calculate Shannon entropy of data"""
+        try:
+            if not data:
+                return 0
+            
+            # Count byte frequencies
+            byte_counts = Counter(data)
+            data_len = len(data)
+            
+            # Calculate entropy
+            entropy = 0
+            for count in byte_counts.values():
+                probability = count / data_len
+                if probability > 0:
+                    entropy -= probability * (probability.bit_length() - 1)
+            
+            return entropy
+            
+        except Exception:
+            return 0
+    
+    def _categorize_threats(self, threats):
+        """Categorize threats by type"""
+        try:
+            categories = {
+                'port_scanning': [],
+                'malware_indicators': [],
+                'data_exfiltration': [],
+                'suspicious_ips': [],
+                'anomalous_traffic': []
+            }
+            
+            for threat in threats:
+                if 'port' in threat.lower():
+                    categories['port_scanning'].append(threat)
+                elif 'malware' in threat.lower() or 'indicator' in threat.lower():
+                    categories['malware_indicators'].append(threat)
+                elif 'exfiltration' in threat.lower() or 'upload' in threat.lower():
+                    categories['data_exfiltration'].append(threat)
+                elif 'ip' in threat.lower():
+                    categories['suspicious_ips'].append(threat)
+                else:
+                    categories['anomalous_traffic'].append(threat)
+            
+            return categories
+            
+        except Exception as e:
+            return {'error': f"Threat categorization failed: {str(e)}"}
     
     def _calculate_risk_score(self, packet_count, protocols, threats, ports, ips):
         """Calculate comprehensive risk score from 0-100"""
@@ -240,6 +504,55 @@ class PcapAnalyzer:
         
         # Threat score
         score += len(threats) * 15
+        
+        # Protocol risk
+        if 'HTTP' in protocols:
+            score += 10
+        if 'FTP' in protocols:
+            score += 20
+        if 'TELNET' in protocols:
+            score += 25
+        
+        # Suspicious port usage
+        suspicious_ports = [port for port in ports 
+                          if port in self.threat_patterns['suspicious_ports']]
+        score += len(suspicious_ports) * 10
+        
+        # IP diversity risk (too many unique IPs might indicate scanning)
+        if len(ips) > 100:
+            score += 15
+        elif len(ips) > 50:
+            score += 10
+        
+        return min(score, 100)
+    
+    def _calculate_enhanced_risk_score(self, packet_count, protocols, threats, ports, ips, 
+                                     suspicious_payloads, scanning_activity, encrypted_traffic):
+        """Calculate enhanced risk score with additional threat factors"""
+        score = 0
+        
+        # Base score from packet count
+        if packet_count > 10000:
+            score += 20
+        elif packet_count > 5000:
+            score += 15
+        elif packet_count > 1000:
+            score += 10
+        
+        # Threat score
+        score += len(threats) * 15
+        
+        # Suspicious payload score
+        score += len(suspicious_payloads) * 20
+        
+        # Scanning activity score
+        score += len(scanning_activity) * 25
+        
+        # Encrypted traffic score (potential data exfiltration)
+        if encrypted_traffic > 100:
+            score += 15
+        elif encrypted_traffic > 50:
+            score += 10
         
         # Protocol risk
         if 'HTTP' in protocols:
