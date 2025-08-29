@@ -574,20 +574,86 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
                 
+                <!-- Enhanced Traffic Metrics Dashboard -->
+                <div class="section">
+                    <h3>📊 Traffic Metrics</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5em; font-weight: bold; color: #3498db;">${result.duration_seconds || 0}</div>
+                            <div>Duration (seconds)</div>
+                        </div>
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5em; font-weight: bold; color: #3498db;">${result.packets_per_second || 0}</div>
+                            <div>Packets/Second</div>
+                        </div>
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5em; font-weight: bold; color: #3498db;">${result.avg_packet_size || 0}</div>
+                            <div>Avg Packet Size (bytes)</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Enhanced Protocol Analysis Dashboard -->
                 <div class="section">
                     <h3>📊 Protocol Analysis</h3>
-                    <p><strong>Detected Protocols:</strong> ${Object.entries(result.protocols).map(([proto, count]) => `${proto}: ${count.toLocaleString()}`).join(', ')}</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                        ${Object.entries(result.protocols).map(([proto, count]) => `
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border-left: 4px solid #3498db;">
+                                <div style="font-size: 1.5em; font-weight: bold; color: #2c3e50;">${count.toLocaleString()}</div>
+                                <div style="color: #7f8c8d;">${proto}</div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
                 
+                <!-- Enhanced Connection Analysis Dashboard -->
+                <div class="section">
+                    <h3>🌐 Connection Analysis</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5em; font-weight: bold; color: #3498db;">${result.connection_analysis?.total_connections || 0}</div>
+                            <div>Total Connections</div>
+                        </div>
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5em; font-weight: bold; color: #3498db;">${result.connection_analysis?.unique_connections || 0}</div>
+                            <div>Unique Connections</div>
+                        </div>
+                        <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5em; font-weight: bold; color: #3498db;">${result.connection_analysis?.unique_ips || 0}</div>
+                            <div>Unique IP Addresses</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Enhanced Top IP Addresses Dashboard -->
+                ${Object.keys(result.top_ips).length > 0 ? `
                 <div class="section">
                     <h3>🏠 Top IP Addresses</h3>
-                    <p>${Object.entries(result.top_ips).map(([ip, count]) => `${ip}: ${count.toLocaleString()} packets`).join(', ')}</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 15px 0;">
+                        ${Object.entries(result.top_ips).map(([ip, count]) => `
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #27ae60;">
+                                <div style="font-weight: bold; color: #2c3e50;">${ip}</div>
+                                <div style="color: #7f8c8d; margin-top: 5px;">${count.toLocaleString()} packets</div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
+                ` : '<div class="section"><h3>🏠 Top IP Addresses</h3><p style="color: #7f8c8d;">No IP addresses detected in this capture</p></div>'}
                 
+                <!-- Enhanced Top Ports Dashboard -->
+                ${Object.keys(result.top_ports).length > 0 ? `
                 <div class="section">
                     <h3>🔌 Top Ports</h3>
-                    <p>${Object.entries(result.top_ports).map(([port, count]) => `Port ${port}: ${count.toLocaleString()} packets`).join(', ')}</p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">
+                        ${Object.entries(result.top_ports).map(([port, count]) => `
+                            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #e67e22;">
+                                <div style="font-weight: bold; color: #2c3e50;">Port ${port}</div>
+                                <div style="color: #7f8c8d; margin-top: 5px;">${count.toLocaleString()} packets</div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
+                ` : '<div class="section"><h3>🔌 Top Ports</h3><p style="color: #7f8c8d;">No ports detected in this capture</p></div>'}
                 
                 ${result.threat_categories ? `
                 <div class="section">
@@ -664,7 +730,151 @@ HTML_TEMPLATE = """
                 `;
             }
             
+            // Add downloadable reports section
+            html += `
+                <div class="section">
+                    <h3>📊 Download Reports</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 15px 0;">
+                        <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #3498db;">
+                            <h4 style="color: #2c3e50; margin: 0 0 15px 0;">📄 Full Analysis Report</h4>
+                            <p style="color: #7f8c8d; margin: 0 0 15px 0;">Comprehensive security analysis with all findings</p>
+                            <button onclick="downloadReport('full', ${JSON.stringify(result)})" style="background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                📥 Download Full Report
+                            </button>
+                        </div>
+                        
+                        <div style="background: #fff9f0; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #f39c12;">
+                            <h4 style="color: #2c3e50; margin: 0 0 15px 0;">📊 Analysis Data (JSON)</h4>
+                            <p style="color: #7f8c8d; margin: 0 0 15px 0;">Raw analysis data for further processing</p>
+                            <button onclick="downloadReport('json', ${JSON.stringify(result)})" style="background: #f39c12; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                📥 Download JSON Data
+                            </button>
+                        </div>
+                        
+                        <div style="background: #f0f9f0; padding: 20px; border-radius: 8px; text-align: center; border: 2px solid #27ae60;">
+                            <h4 style="color: #2c3e50; margin: 0 0 15px 0;">🔒 Executive Summary</h4>
+                            <p style="color: #7f8c8d; margin: 0 0 15px 0;">High-level security overview for stakeholders</p>
+                            <button onclick="downloadReport('executive', ${JSON.stringify(result)})" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                📥 Download Summary
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
             resultsDiv.innerHTML = html;
+        }
+        
+        // Function to handle report downloads
+        function downloadReport(type, data) {
+            let content, filename, mimeType;
+            
+            switch(type) {
+                case 'full':
+                    content = generateFullReport(data);
+                    filename = 'pcap_security_analysis_full_report.txt';
+                    mimeType = 'text/plain';
+                    break;
+                case 'json':
+                    content = JSON.stringify(data, null, 2);
+                    filename = 'pcap_analysis_data.json';
+                    mimeType = 'application/json';
+                    break;
+                case 'executive':
+                    content = generateExecutiveSummary(data);
+                    filename = 'pcap_executive_summary.txt';
+                    mimeType = 'text/plain';
+                    break;
+            }
+            
+            const blob = new Blob([content], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+        
+        function generateFullReport(data) {
+            return `PCAP SECURITY ANALYSIS REPORT
+Generated: ${new Date().toLocaleString()}
+File: ${data.filename}
+Analysis Time: ${data.analysis_time}
+
+=== EXECUTIVE SUMMARY ===
+Total Packets: ${data.packet_count.toLocaleString()}
+Total Bytes: ${(data.total_bytes / 1024 / 1024).toFixed(2)} MB
+Risk Score: ${data.risk_score}/100
+Threats Detected: ${data.threats.length}
+
+=== PROTOCOL ANALYSIS ===
+${Object.entries(data.protocols).map(([proto, count]) => `${proto}: ${count.toLocaleString()} packets`).join('\\n')}
+
+=== CONNECTION ANALYSIS ===
+Total Connections: ${data.connection_analysis?.total_connections || 0}
+Unique Connections: ${data.connection_analysis?.unique_connections || 0}
+Unique IP Addresses: ${data.connection_analysis?.unique_ips || 0}
+
+=== TOP IP ADDRESSES ===
+${Object.entries(data.top_ips).map(([ip, count]) => `${ip}: ${count.toLocaleString()} packets`).join('\\n')}
+
+=== TOP PORTS ===
+${Object.entries(data.top_ports).map(([port, count]) => `Port ${port}: ${count.toLocaleString()} packets`).join('\\n')}
+
+=== THREAT ANALYSIS ===
+Regex Threats: ${data.threat_categories?.regex_threats?.length || 0}
+NLP Threats: ${data.threat_categories?.nlp_threats?.length || 0}
+Suspicious Payloads: ${data.threat_categories?.suspicious_payloads?.length || 0}
+
+${data.threats.length > 0 ? '\\nDetected Threats:\\n' + data.threats.map(threat => `- ${threat}`).join('\\n') : '\\nNo threats detected.'}
+
+=== SECURITY RECOMMENDATIONS ===
+${data.recommendations ? data.recommendations.map(rec => `- ${rec}`).join('\\n') : 'No specific recommendations.'}
+
+=== TECHNICAL DETAILS ===
+PCAP Version: ${data.file_info?.version || 'Unknown'}
+Byte Order: ${data.file_info?.byte_order || 'Unknown'}
+Link Type: ${data.file_info?.link_type || 'Unknown'}
+
+--- End of Report ---`;
+        }
+        
+        function generateExecutiveSummary(data) {
+            const riskLevel = data.risk_score > 70 ? 'CRITICAL' : 
+                             data.risk_score > 50 ? 'HIGH' : 
+                             data.risk_score > 30 ? 'MEDIUM' : 'LOW';
+            
+            return `PCAP SECURITY ANALYSIS - EXECUTIVE SUMMARY
+Generated: ${new Date().toLocaleString()}
+File: ${data.filename}
+
+=== SECURITY STATUS ===
+Risk Level: ${riskLevel}
+Risk Score: ${data.risk_score}/100
+Overall Assessment: ${data.risk_score > 70 ? 'Immediate action required' : 
+                                    data.risk_score > 50 ? 'Security review recommended' : 
+                                    data.risk_score > 30 ? 'Monitor for suspicious activity' : 'Standard security practices sufficient'}
+
+=== KEY FINDINGS ===
+- Total packets analyzed: ${data.packet_count.toLocaleString()}
+- Protocols detected: ${Object.keys(data.protocols).length}
+- Threats identified: ${data.threats.length}
+- Network activity: ${data.connection_analysis?.unique_ips || 0} unique IP addresses
+
+=== RECOMMENDATIONS ===
+${data.recommendations ? data.recommendations.slice(0, 3).map(rec => `- ${rec}`).join('\\n') : 'Continue regular security monitoring.'}
+
+=== NEXT STEPS ===
+${data.risk_score > 70 ? '1. Immediate security incident response\\n2. Contact security team\\n3. Conduct full network audit' :
+  data.risk_score > 50 ? '1. Schedule security assessment\\n2. Review access controls\\n3. Enhance monitoring' :
+  data.risk_score > 30 ? '1. Monitor network patterns\\n2. Review security logs\\n3. Update security policies' :
+  '1. Continue regular monitoring\\n2. Maintain security practices\\n3. Regular security reviews'}
+
+--- End of Summary ---`;
+        }
         }
     </script>
 </body>
