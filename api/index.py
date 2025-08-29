@@ -98,18 +98,30 @@ class PcapAnalyzer:
                     if len(packet_data) >= 14:
                         eth_type = struct.unpack(f'{byte_order}H', packet_data[12:14])[0]
                         
+                        # Debug output for first few packets
+                        if packet_count <= 5:
+                            print(f"Packet {packet_count}: eth_type=0x{eth_type:04x}, len={len(packet_data)}")
+                        
                         if eth_type == 0x0800 and len(packet_data) >= 34:  # IPv4
                             protocols['IP'] += 1
                             
-                            # Extract IP addresses
+                            # Extract IP addresses (correct offset: 26-30 for src, 30-34 for dst)
                             src_ip = '.'.join(str(x) for x in packet_data[26:30])
                             dst_ip = '.'.join(str(x) for x in packet_data[30:34])
                             ips[src_ip] += 1
                             ips[dst_ip] += 1
                             
-                            # Check protocol
+                            # Debug output for first few packets
+                            if packet_count <= 5:
+                                print(f"  IPv4: {src_ip} -> {dst_ip}")
+                            
+                            # Check protocol (correct offset: 23 for IP protocol)
                             if len(packet_data) >= 35:
                                 ip_proto = packet_data[23]
+                                
+                                # Debug output for protocol
+                                if packet_count <= 5:
+                                    print(f"  Protocol: {ip_proto} (6=TCP, 17=UDP, 1=ICMP)")
                                 
                                 if ip_proto == 6:  # TCP
                                     protocols['TCP'] += 1
@@ -133,6 +145,10 @@ class PcapAnalyzer:
                                             'protocol': 'TCP'
                                         }
                                         connections.append(connection)
+                                        
+                                        # Debug output for connections
+                                        if packet_count <= 5:
+                                            print(f"  TCP Connection: {src_ip}:{src_port} -> {dst_ip}:{dst_port}")
                                         
                                         # NLP analysis of payload
                                         if len(packet_data) > 54:  # TCP header is 20 bytes
@@ -167,6 +183,18 @@ class PcapAnalyzer:
                 duration = 0  # Simplified for now
                 avg_packet_size = total_bytes / packet_count if packet_count > 0 else 0
                 packets_per_second = packet_count / duration if duration > 0 else 0
+                
+                # Debug output for final results
+                print(f"\n=== ANALYSIS RESULTS ===")
+                print(f"Total packets: {packet_count}")
+                print(f"Total bytes: {total_bytes}")
+                print(f"Protocols found: {dict(protocols)}")
+                print(f"IPs found: {len(ips)}")
+                print(f"Ports found: {len(ports)}")
+                print(f"Connections: {len(connections)}")
+                print(f"Threats: {len(threats)}")
+                print(f"NLP threats: {len(nlp_threats)}")
+                print(f"=======================\n")
                 
                 # Enhanced risk score with NLP
                 risk_score = self._calculate_enhanced_risk_score(packet_count, protocols, threats, 
