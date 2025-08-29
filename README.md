@@ -1,8 +1,8 @@
-# 🔒 PCAP Security Analyzer
+#  PCAP Security Analyzer
 
 A comprehensive network traffic analysis tool that combines advanced packet inspection, threat detection, and machine learning to identify security threats in PCAP files.
 
-## 🌟 Features
+##  Features
 
 ### **Advanced Packet Analysis**
 - **Protocol Detection**: IPv4, IPv6, TCP, UDP, ICMP, ARP, and custom protocols
@@ -27,7 +27,7 @@ A comprehensive network traffic analysis tool that combines advanced packet insp
 - **Interactive Dashboards**: Traffic metrics, protocol analysis, and threat visualization
 - **Export Capabilities**: PDF reports and JSON data export for further analysis
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Prerequisites
 - Python 3.8 or higher
@@ -55,7 +55,7 @@ A comprehensive network traffic analysis tool that combines advanced packet insp
 4. **Open your browser**
    Navigate to `http://localhost:5000`
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 pcap-analyzer/
@@ -85,7 +85,7 @@ For more comprehensive testing, you can download sample PCAP files from:
 - **[NetResec Pcap Files](https://www.netresec.com/?page=PcapFiles)**: Network security research samples
 - **[DSI Toolkit Samples](https://github.com/defenxor/dsi-toolkit/tree/master/samples)**: Digital forensics samples
 
-## 📊 Analysis Capabilities
+##  Analysis Capabilities
 
 ### **Protocol Analysis**
 - **Network Layer**: IP version detection, fragmentation analysis, TTL examination
@@ -119,7 +119,7 @@ For more comprehensive testing, you can download sample PCAP files from:
 - **Risk Assessment**: Multi-factor security scoring algorithm
 - **Threat Correlation**: Pattern matching across multiple analysis layers
 
-## 🛡️ Security Features
+##  Security Features
 
 ### **Threat Intelligence Integration**
 - **Pattern Matching**: 60+ regex patterns for known attack signatures
@@ -147,14 +147,14 @@ export FLASK_DEBUG=1
 - **Risk Scoring**: Adjust weights in `_calculate_enhanced_risk_score` method
 - **Report Templates**: Customize PDF generation in `generate_pdf` function
 
-## 📈 Performance
+##  Performance
 
 - **File Size Support**: Up to 16MB PCAP files
 - **Processing Speed**: Optimized for large packet captures
 - **Memory Efficiency**: Stream-based processing with minimal memory footprint
 - **Scalability**: Modular architecture for easy performance enhancements
 
-## 🧪 Testing
+##  Testing
 
 ### **Unit Tests**
 ```bash
@@ -168,15 +168,6 @@ python -m pytest tests/
 3. Test PDF report generation
 4. Validate risk scoring algorithms
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our contributing guidelines:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
 
 ### **Development Setup**
 ```bash
@@ -187,7 +178,7 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt  # Development dependencies
 ```
 
-## 📚 API Documentation
+##  API Documentation
 
 ### **Endpoints**
 
@@ -209,7 +200,7 @@ pip install -r requirements-dev.txt  # Development dependencies
 }
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ### **Core Components**
 1. **PcapAnalyzer**: Main analysis engine with threat detection
@@ -223,32 +214,7 @@ pip install -r requirements-dev.txt  # Development dependencies
 - **Analysis**: Custom PCAP parser, regex engine, NLP integration
 - **Reporting**: PDF generation, JSON export, data visualization
 
-## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+**Made with Love, Salma**
 
-- **Wireshark Community**: For PCAP format documentation
-- **Security Researchers**: For threat pattern contributions
-- **Open Source Contributors**: For various libraries and tools
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/pcap-analyzer/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/pcap-analyzer/discussions)
-- **Documentation**: [Wiki](https://github.com/yourusername/pcap-analyzer/wiki)
-
-## 🔮 Roadmap
-
-- [ ] **Machine Learning Integration**: Enhanced anomaly detection
-- [ ] **Real-time Monitoring**: Live network traffic analysis
-- [ ] **Threat Intelligence**: Integration with external threat feeds
-- [ ] **Cloud Deployment**: AWS/Azure deployment options
-- [ ] **Mobile App**: iOS/Android companion applications
-
----
-
-**Made with ❤️ for the cybersecurity community**
-
-*This tool is designed for educational and research purposes. Always ensure you have proper authorization before analyzing network traffic.*
